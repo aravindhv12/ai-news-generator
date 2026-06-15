@@ -135,8 +135,19 @@ function App() {
       const response = await axios.post(`${apiBaseURL}/api/auth/login`, formData);
       localStorage.setItem('token', response.data.access_token);
       setToken(response.data.access_token);
-    } catch (err) {
-      setLoginError('Invalid credentials');
+    } catch (err: any) {
+      if (err.response) {
+        if (err.response.status === 401) {
+          setLoginError('Invalid credentials');
+        } else {
+          const detail = err.response.data?.detail || err.response.data?.message || 'Internal Server Error';
+          setLoginError(`Server error (${err.response.status}): ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`);
+        }
+      } else if (err.request) {
+        setLoginError('Could not connect to backend server. Please verify your database connection variables on Vercel.');
+      } else {
+        setLoginError('An unexpected error occurred.');
+      }
     } finally {
       setLoading(false);
     }
