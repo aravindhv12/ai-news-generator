@@ -30,11 +30,11 @@
     },
     {
       "src": "/(assets/.*)",
-      "dest": "/$1"
+      "dest": "frontend/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "frontend/index.html"
     }
   ]
 }
