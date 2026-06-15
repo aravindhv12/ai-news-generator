@@ -263,7 +263,7 @@ class AutomationPipeline:
         
         for post in rejected_posts:
             # Delete corresponding generated card image
-            card_path = f"output/{post.id}.png"
+            card_path = os.path.join(image_service.output_dir, f"{post.id}.png")
             if os.path.exists(card_path):
                 try:
                     os.remove(card_path)

@@ -9,8 +9,11 @@ logger = logging.getLogger(__name__)
 
 class SocialCardGenerator:
     def __init__(self, output_dir: str = "output"):
-        self.output_dir = output_dir
-        os.makedirs(output_dir, exist_ok=True)
+        if os.getenv("VERCEL"):
+            self.output_dir = "/tmp/output"
+        else:
+            self.output_dir = output_dir
+        os.makedirs(self.output_dir, exist_ok=True)
         # In production, these fonts should be in an assets folder
         self.font_bold = "/System/Library/Fonts/HelveticaNeue.ttc" # Mac default
         self.font_regular = "/System/Library/Fonts/HelveticaNeue.ttc"

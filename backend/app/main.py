@@ -41,7 +41,10 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # Mount the output directory to serve generated images
-output_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../output"))
+if os.getenv("VERCEL"):
+    output_path = "/tmp/output"
+else:
+    output_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../output"))
 os.makedirs(output_path, exist_ok=True)
 app.mount("/output", StaticFiles(directory=output_path), name="output")
 
