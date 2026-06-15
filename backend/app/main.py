@@ -1,7 +1,14 @@
+import os
+import sys
+
+# Add backend directory to sys.path to support importing 'app' package when run directly by Vercel
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if backend_dir not in sys.path:
+    sys.path.append(backend_dir)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
 
 from app.core.config import settings
 from app.api.posts import router as posts_router
