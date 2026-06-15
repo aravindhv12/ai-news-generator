@@ -11,8 +11,70 @@ import asyncio
 from datetime import datetime, timedelta
 import os
 import logging
+import random
+import re
 
 logger = logging.getLogger(__name__)
+
+FALLBACK_IMAGES = [
+    "https://images.unsplash.com/photo-1607799279861-4dd421887fb3?w=800", # Code on screen
+    "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800", # Laptop & notebook
+    "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800", # Abstract blue network
+    "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800", # Server rack lights
+    "https://images.unsplash.com/photo-1593508512255-86ab42a8e620?w=800", # VR headset
+    "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800", # Microchip circuit
+    "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800", # Circuit board close up
+    "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800", # Robo arm / tech
+    "https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=800", # Modern tech gadget
+    "https://images.unsplash.com/photo-1504639725590-34d0984388bd?w=800"  # Neon workstation coding
+]
+
+def get_clean_fallback_caption(title: str, content: str) -> str:
+    """
+    Extracts 1-2 complete sentences from parsed content without truncating mid-word.
+    Ensures caption is crisp, complete, and ends with proper punctuation.
+    """
+    if not content:
+        return f"Explore the latest developments regarding {title} and stay updated with modern tech shifts."
+    
+    # Strip HTML tags
+    text = re.sub(r'<[^<]+?>', '', content).strip()
+    # Replace multiple spaces/newlines
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Split by sentence boundaries (.!? followed by space)
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    caption_parts = []
+    char_count = 0
+    
+    for s in sentences:
+        s = s.strip()
+        if not s:
+            continue
+        # Skip sentences that don't start with a letter/number or are too short
+        if len(s) < 15 or not s[0].isalnum():
+            continue
+        # If adding this sentence exceeds 140 chars, stop
+        if char_count + len(s) > 140:
+            # If we haven't added any sentence yet, add this one truncated neatly at a word boundary
+            if not caption_parts:
+                words = s.split()
+                truncated_s = []
+                for w in words:
+                    if len(" ".join(truncated_s + [w])) > 135:
+                        break
+                    truncated_s.append(w)
+                caption_parts.append(" ".join(truncated_s) + ".")
+            break
+        caption_parts.append(s)
+        char_count += len(s)
+        
+    caption = " ".join(caption_parts)
+    if not caption:
+        caption = f"Key tech updates emerge regarding {title}. Check out the full breakdown."
+        
+    return caption
+
 
 class AutomationPipeline:
     def __init__(self):
@@ -179,9 +241,10 @@ class AutomationPipeline:
                 # Fallback content if AI failed to return this story
                 if not content:
                     logger.info(f"Using fallback content for story {story.id}")
+                    fallback_caption = get_clean_fallback_caption(story.title, story.content)
                     content = {
                         "headline": story.title[:100],
-                        "caption": (story.content[:150] + "..." if story.content else "Latest technology news update. Read more details here."),
+                        "caption": fallback_caption,
                         "hashtags": ["#Tech", "#News", f"#{story.source.replace(' ', '')}"]
                     }
                 
@@ -201,7 +264,7 @@ class AutomationPipeline:
                     caption=content.get("caption"),
                     template="default",
                     generation_source=source,
-                    image_url=img_url or "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800",
+                    image_url=img_url or random.choice(FALLBACK_IMAGES),
                     status="DRAFT"
                 )
                 db.add(post)
