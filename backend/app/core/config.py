@@ -34,3 +34,12 @@ class Settings(BaseSettings):
         env_file = env_file_path
 
 settings = Settings()
+
+# Safety validation for production deployments (e.g. Vercel)
+if os.getenv("VERCEL") and "localhost" in settings.DATABASE_URL:
+    raise ValueError(
+        "DATABASE_URL environment variable is missing or pointing to localhost on Vercel. "
+        "Please configure DATABASE_URL in Vercel's Environment Variables (Project Settings -> Environment Variables) "
+        "with your Supabase connection string (ensuring ?sslmode=require is appended) and redeploy."
+    )
+
