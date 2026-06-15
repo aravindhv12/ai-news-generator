@@ -51,11 +51,19 @@ class NewsCollector:
                 resp = await client.get("https://hacker-news.firebaseio.com/v0/topstories.json")
                 story_ids = resp.json()[:10] # Top 10
                 
+                async def fetch_story(sid):
+                    try:
+                        story_resp = await client.get(f"https://hacker-news.firebaseio.com/v0/item/{sid}.json", timeout=5.0)
+                        return story_resp.json()
+                    except Exception as e:
+                        logger.error(f"Error fetching HN item {sid}: {e}")
+                        return {}
+
+                stories = await asyncio.gather(*(fetch_story(sid) for sid in story_ids))
+                
                 results = []
-                for sid in story_ids:
-                    story_resp = await client.get(f"https://hacker-news.firebaseio.com/v0/item/{sid}.json")
-                    story = story_resp.json()
-                    if story.get("url"):
+                for story in stories:
+                    if story and story.get("url"):
                         results.append({
                             "title": story.get("title", ""),
                             "url": story.get("url", ""),
