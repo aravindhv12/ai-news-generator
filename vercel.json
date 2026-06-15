@@ -30,15 +30,11 @@
     },
     {
       "src": "/(assets/.*)",
-      "dest": "frontend/dist/$1"
-    },
-    {
-      "src": "/(index.html)",
-      "dest": "frontend/dist/$1"
+      "dest": "/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "frontend/dist/$1"
+      "dest": "/index.html"
     }
   ]
 }
