@@ -72,10 +72,12 @@ function App() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
+  const apiBaseURL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : '';
+
   const api = useMemo(() => axios.create({
-    baseURL: 'http://localhost:8000',
+    baseURL: apiBaseURL,
     headers: { Authorization: `Bearer ${token}` }
-  }), [token]);
+  }), [token, apiBaseURL]);
 
   const fetchData = useCallback(async () => {
     if (!token) return;
@@ -130,7 +132,7 @@ function App() {
       const formData = new FormData();
       formData.append('username', username);
       formData.append('password', password);
-      const response = await axios.post('http://localhost:8000/api/auth/login', formData);
+      const response = await axios.post(`${apiBaseURL}/api/auth/login`, formData);
       localStorage.setItem('token', response.data.access_token);
       setToken(response.data.access_token);
     } catch (err) {
@@ -364,7 +366,7 @@ function App() {
                     posts.filter(p => p.status === 'DRAFT').map(post => (
                       <article key={post.id} className="post-card slide-up">
                         <div className="post-image-container">
-                          <img src={`http://localhost:8000/output/${post.id}.png`} alt="Card" className="preview-img" 
+                          <img src={`${apiBaseURL}/output/${post.id}.png`} alt="Card" className="preview-img" 
                             onError={(e) => {(e.target as HTMLImageElement).src = post.image_url}} />
                         </div>
                         <div className="post-info">
