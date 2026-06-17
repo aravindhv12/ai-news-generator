@@ -67,6 +67,9 @@ class AIService:
         3. Provide 3 to 5 highly relevant tech hashtags.
 
         CRITICAL STYLE GUIDELINES:
+        - The caption MUST consist of complete, grammatically correct sentences only.
+        - NO fragments, NO half thoughts, and NO truncated sentences ending in "...".
+        - The total word count of the caption MUST be between 20 and 25 words. Do not deviate.
         - NEVER use generic AI words (e.g., "delve", "testament", "revolutionize", "tapestry", "moreover").
         - Avoid generic motivational text or repetitive phrasing.
         - Ensure the language is natural, concise, professional, and social-media ready.
@@ -117,6 +120,9 @@ class AIService:
         3. 3 to 5 highly relevant tech hashtags.
 
         CRITICAL STYLE GUIDELINES:
+        - The caption MUST consist of complete, grammatically correct sentences only.
+        - NO fragments, NO half thoughts, and NO truncated sentences ending in "...".
+        - The total word count of the caption MUST be between 20 and 25 words. Do not deviate.
         - NEVER use generic AI words (e.g., "delve", "testament", "revolutionize", "tapestry", "moreover").
         - Ensure language is natural, concise, professional, and social-media ready.
 

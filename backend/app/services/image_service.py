@@ -78,7 +78,7 @@ class SocialCardGenerator:
         
         # Draw Brand Accent Label (aligned to bottom)
         brand_y = height - 90
-        draw.text((padding, brand_y), "AI TECH NEWS", font=font_h, fill=accent_color)
+        draw.text((padding, brand_y), "GUESS", font=font_h, fill=accent_color)
         
         output_path = os.path.join(self.output_dir, f"{post_id}.png")
         card.save(output_path)

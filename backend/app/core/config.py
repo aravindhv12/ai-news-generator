@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     ADMIN_USER: str = "admin"
     ADMIN_PASSWORD: str = "change_me" # Use get_password_hash during setup
     JWT_SECRET: str = "super-secret-key"
+    CRON_SECRET: Optional[str] = None
     
     class Config:
         env_file = env_file_path

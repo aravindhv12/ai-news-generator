@@ -16,64 +16,165 @@ import re
 
 logger = logging.getLogger(__name__)
 
-FALLBACK_IMAGES = [
-    "https://images.unsplash.com/photo-1607799279861-4dd421887fb3?w=800", # Code on screen
-    "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800", # Laptop & notebook
-    "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800", # Abstract blue network
-    "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800", # Server rack lights
-    "https://images.unsplash.com/photo-1593508512255-86ab42a8e620?w=800", # VR headset
-    "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800", # Microchip circuit
-    "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800", # Circuit board close up
-    "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800", # Robo arm / tech
-    "https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=800", # Modern tech gadget
-    "https://images.unsplash.com/photo-1504639725590-34d0984388bd?w=800"  # Neon workstation coding
+FALLBACK_IMAGES_REGISTRY = [
+    {"url": "https://images.unsplash.com/photo-1607799279861-4dd421887fb3?w=800", "theme": "code", "color": "green", "style": "realistic"},
+    {"url": "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800", "theme": "workspace", "color": "grey", "style": "minimalist"},
+    {"url": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800", "theme": "abstract", "color": "blue", "style": "conceptual"},
+    {"url": "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800", "theme": "datacenter", "color": "blue", "style": "realistic"},
+    {"url": "https://images.unsplash.com/photo-1593508512255-86ab42a8e620?w=800", "theme": "device", "color": "grey", "style": "minimalist"},
+    {"url": "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800", "theme": "hardware", "color": "grey", "style": "cyberpunk"},
+    {"url": "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800", "theme": "hardware", "color": "green", "style": "realistic"},
+    {"url": "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800", "theme": "hardware", "color": "grey", "style": "conceptual"},
+    {"url": "https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=800", "theme": "device", "color": "blue", "style": "minimalist"},
+    {"url": "https://images.unsplash.com/photo-1504639725590-34d0984388bd?w=800", "theme": "code", "color": "green", "style": "cyberpunk"},
+    {"url": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800", "theme": "code", "color": "green", "style": "conceptual"},
+    {"url": "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800", "theme": "device", "color": "grey", "style": "minimalist"},
+    {"url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800", "theme": "abstract", "color": "pink", "style": "minimalist"},
+    {"url": "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800", "theme": "abstract", "color": "purple", "style": "cyberpunk"},
+    {"url": "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800", "theme": "workspace", "color": "grey", "style": "realistic"},
+    {"url": "https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=800", "theme": "workspace", "color": "blue", "style": "minimalist"},
+    {"url": "https://images.unsplash.com/photo-1581092921461-eab62e97a780?w=800", "theme": "hardware", "color": "grey", "style": "realistic"},
+    {"url": "https://images.unsplash.com/photo-1535378917042-10a22c95931a?w=800", "theme": "abstract", "color": "dark", "style": "conceptual"},
+    {"url": "https://images.unsplash.com/photo-1544256718-3bcf237f3974?w=800", "theme": "code", "color": "dark", "style": "realistic"},
+    {"url": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800", "theme": "abstract", "color": "blue", "style": "minimalist"}
 ]
 
-def get_clean_fallback_caption(title: str, content: str) -> str:
-    """
-    Extracts 1-2 complete sentences from parsed content without truncating mid-word.
-    Ensures caption is crisp, complete, and ends with proper punctuation.
-    """
-    if not content:
-        return f"Explore the latest developments regarding {title} and stay updated with modern tech shifts."
+def select_diverse_fallback_image(recent_posts: list) -> str:
+    recent_urls = [p.image_url for p in recent_posts if p.image_url]
+    recent_themes = {}
+    recent_colors = {}
+    recent_styles = {}
     
-    # Strip HTML tags
-    text = re.sub(r'<[^<]+?>', '', content).strip()
-    # Replace multiple spaces/newlines
-    text = re.sub(r'\s+', ' ', text)
+    for url in recent_urls:
+        match = next((img for img in FALLBACK_IMAGES_REGISTRY if img["url"] == url), None)
+        if match:
+            recent_themes[match["theme"]] = recent_themes.get(match["theme"], 0) + 1
+            recent_colors[match["color"]] = recent_colors.get(match["color"], 0) + 1
+            recent_styles[match["style"]] = recent_styles.get(match["style"], 0) + 1
+
+    best_image = None
+    best_score = -9999
     
-    # Split by sentence boundaries (.!? followed by space)
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-    caption_parts = []
-    char_count = 0
-    
-    for s in sentences:
-        s = s.strip()
-        if not s:
-            continue
-        # Skip sentences that don't start with a letter/number or are too short
-        if len(s) < 15 or not s[0].isalnum():
-            continue
-        # If adding this sentence exceeds 140 chars, stop
-        if char_count + len(s) > 140:
-            # If we haven't added any sentence yet, add this one truncated neatly at a word boundary
-            if not caption_parts:
-                words = s.split()
-                truncated_s = []
-                for w in words:
-                    if len(" ".join(truncated_s + [w])) > 135:
-                        break
-                    truncated_s.append(w)
-                caption_parts.append(" ".join(truncated_s) + ".")
-            break
-        caption_parts.append(s)
-        char_count += len(s)
+    for candidate in FALLBACK_IMAGES_REGISTRY:
+        url = candidate["url"]
         
-    caption = " ".join(caption_parts)
-    if not caption:
-        caption = f"Key tech updates emerge regarding {title}. Check out the full breakdown."
+        # 1. Similarity check / Image Similarity Detection
+        similarity_penalty = 0
+        if url in recent_urls[:5]:
+            similarity_penalty = -100
+        elif url in recent_urls:
+            similarity_penalty = -50
+            
+        # 2. Visual Variety Score & Topic Diversity Score
+        theme_count = recent_themes.get(candidate["theme"], 0)
+        color_count = recent_colors.get(candidate["color"], 0)
+        style_count = recent_styles.get(candidate["style"], 0)
         
-    return caption
+        variety_penalty = (theme_count * 10) + (color_count * 10) + (style_count * 10)
+        jitter = random.uniform(0, 1)
+        
+        score = - variety_penalty + similarity_penalty + jitter
+        if score > best_score:
+            best_score = score
+            best_image = url
+            
+    return best_image or FALLBACK_IMAGES_REGISTRY[0]["url"]
+
+def get_clean_fallback_caption(title: str, content: str, recent_posts: list) -> str:
+    """
+    Generates a structured, professional tech caption of exactly 20-25 words.
+    Structure: Hook -> Insight -> CTA.
+    Guarantees no duplicate captions or hooks against recent posts.
+    """
+    topic = title.split(" - ")[0].split(" | ")[0].strip()
+    if topic.endswith(".") or topic.endswith("?"):
+        topic = topic[:-1]
+    
+    topic_words = topic.split()
+    if len(topic_words) > 6:
+        topic = " ".join(topic_words[:5])
+        
+    hooks = [
+        f"{topic} is redefining how teams build software.",
+        f"The rapid evolution of {topic} is accelerating industry trends.",
+        f"A new milestone for {topic} has officially been reached.",
+        f"Recent developments in {topic} are turning heads across tech.",
+        f"Significant updates to {topic} promise to streamline engineering workflows.",
+        f"Understanding {topic} is now essential for modern product teams.",
+        f"New reports on {topic} indicate major industry restructuring ahead.",
+        f"Key shifts in {topic} are creating fresh opportunities globally.",
+        f"Deploying {topic} allows organizations to optimize resource usage.",
+        f"The architecture behind {topic} offers major scalability improvements."
+    ]
+    
+    insights = [
+        "Adopting these tools early provides a strong competitive edge.",
+        "Automating key processes helps teams minimize overhead and deploy faster.",
+        "Focusing on developer efficiency is critical for modern software groups.",
+        "Integrating this technology helps systems scale with minimal maintenance.",
+        "This shift forces engineering leads to rethink existing system design.",
+        "Teams prioritizing this integration report much higher delivery speeds.",
+        "Mitigating these technical risks secures better long-term system stability.",
+        "Leveraging structured frameworks makes scaling operations simpler and cleaner.",
+        "Standardizing these pipelines ensures consistent results under peak load.",
+        "Improving codebase flexibility allows for rapid adaptation to future changes."
+    ]
+    
+    ctas = [
+        "What's your plan for this?",
+        "Will you adopt this tool?",
+        "Ready to implement this next?",
+        "What are your key thoughts?",
+        "How will this impact you?",
+        "Is your stack ready yet?",
+        "What are your core concerns?",
+        "Would you try this today?",
+        "How does this affect you?",
+        "What is your next project?"
+    ]
+    
+    # Extract first sentences (hooks) and full captions of recent posts to avoid duplication
+    recent_captions = [p.caption for p in recent_posts if p.caption]
+    recent_hooks = []
+    for cap in recent_captions:
+        parts = re.split(r'(?<=[.!?])\s+', cap)
+        if parts:
+            recent_hooks.append(parts[0])
+
+    # Filter candidate hooks and insights to ensure diversity
+    available_hooks = [h for h in hooks if h not in recent_hooks]
+    if not available_hooks:
+        available_hooks = hooks
+        
+    available_insights = insights
+    
+    # Try combinations
+    for _ in range(300):
+        h = random.choice(available_hooks)
+        i = random.choice(available_insights)
+        c = random.choice(ctas)
+        combined = f"{h} {i} {c}"
+        if combined in recent_captions:
+            continue
+        word_count = len(combined.split())
+        if 20 <= word_count <= 25:
+            return combined
+            
+    # Default fallback construct if search fails
+    h = available_hooks[0]
+    i = available_insights[0]
+    c = ctas[0]
+    combined = f"{h} {i} {c}"
+    words = combined.split()
+    
+    if len(words) < 20:
+        padding = ["now", "today", "efficiently", "seamlessly", "securely", "at scale"]
+        while len(words) < 22:
+            words.insert(-2, random.choice(padding))
+    elif len(words) > 25:
+        words = words[:23] + [words[-1]]
+        
+    return " ".join(words)
 
 
 class AutomationPipeline:
@@ -235,13 +336,17 @@ class AutomationPipeline:
             # Map the generated AI posts by news_id
             ai_posts_by_id = {p.get("news_id"): p for p in ai_posts if p.get("news_id")}
             
+            # Query recent 20 posts from DB for diversity comparisons
+            recent_posts = db.query(Post).order_by(Post.created_at.desc()).limit(20).all()
+            recent_urls = [p.image_url for p in recent_posts if p.image_url]
+
             for story in top_stories:
                 content = ai_posts_by_id.get(story.id)
                 
                 # Fallback content if AI failed to return this story
                 if not content:
                     logger.info(f"Using fallback content for story {story.id}")
-                    fallback_caption = get_clean_fallback_caption(story.title, story.content)
+                    fallback_caption = get_clean_fallback_caption(story.title, story.content, recent_posts)
                     content = {
                         "headline": story.title[:100],
                         "caption": fallback_caption,
@@ -257,6 +362,16 @@ class AutomationPipeline:
                 except:
                     img_url = None
                 
+                # Check if scraped image is generic or duplicate
+                is_scraped_invalid = False
+                if img_url:
+                    if any(x in img_url.lower() for x in ["logo", "favicon", "avatar", "brand", "social-default"]):
+                        is_scraped_invalid = True
+                    elif img_url in recent_urls:
+                        is_scraped_invalid = True
+                        
+                final_image_url = img_url if (img_url and not is_scraped_invalid) else select_diverse_fallback_image(recent_posts)
+
                 # Create Post record
                 post = Post(
                     news_id=story.id,
@@ -264,7 +379,7 @@ class AutomationPipeline:
                     caption=content.get("caption"),
                     template="default",
                     generation_source=source,
-                    image_url=img_url or random.choice(FALLBACK_IMAGES),
+                    image_url=final_image_url,
                     status="DRAFT"
                 )
                 db.add(post)

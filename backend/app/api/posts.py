@@ -260,13 +260,25 @@ def get_dashboard_data(db: Session = Depends(get_db), current_user: Any = Depend
         "pipeline": pipeline_state
     }
 
-# VERCEL CRON ENDPOINTS (Secured by CRON_SECRET header)
 def verify_cron_auth(authorization: str = Header(None)):
-    if settings.JWT_SECRET: # Use secret key comparison
-        expected = f"Bearer {settings.JWT_SECRET}" # For safety using JWT_SECRET as fallback for CRON_SECRET if not explicitly separated
-        # Check standard vercel cron signature if configured, else fallback
-        if authorization != expected and authorization != f"Bearer {getattr(settings, 'CRON_SECRET', 'vercel_cron_key')}" and settings.JWT_SECRET != "super-secret-key":
-            raise HTTPException(status_code=401, detail="Unauthorized Cron Request")
+    # Local dev or testing bypass: allow cron endpoints locally without auth headers
+    if os.getenv("VERCEL") is None:
+        return
+        
+    # 1. Check Vercel-injected CRON_SECRET
+    cron_secret = settings.CRON_SECRET or os.getenv("CRON_SECRET")
+    if cron_secret:
+        if authorization == f"Bearer {cron_secret}":
+            return
+            
+    # 2. Fallback to JWT_SECRET if configured securely
+    if settings.JWT_SECRET and settings.JWT_SECRET != "super-secret-key":
+        if authorization == f"Bearer {settings.JWT_SECRET}":
+            return
+            
+    # If on Vercel and unauthorized, raise 401
+    logger.warning(f"Unauthorized Cron request blocked. Header: {authorization[:15] if authorization else 'None'}...")
+    raise HTTPException(status_code=401, detail="Unauthorized Cron Request")
 
 @router.get("/cron/generate", dependencies=[Depends(verify_cron_auth)])
 @router.post("/cron/generate", dependencies=[Depends(verify_cron_auth)])
