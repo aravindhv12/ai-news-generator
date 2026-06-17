@@ -25,3 +25,4 @@ build/
 # Temporary outputs / artifacts
 output/*.png
 output/*.jpg
+.vercel
