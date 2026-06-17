@@ -39,7 +39,7 @@ FALLBACK_IMAGES_REGISTRY = [
     {"url": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800", "theme": "abstract", "color": "blue", "style": "minimalist"}
 ]
 
-def select_diverse_fallback_image(recent_posts: list) -> str:
+def select_relevant_fallback_image(title: str, content: str, recent_posts: list) -> str:
     recent_urls = [p.image_url for p in recent_posts if p.image_url]
     recent_themes = {}
     recent_colors = {}
@@ -52,6 +52,23 @@ def select_diverse_fallback_image(recent_posts: list) -> str:
             recent_colors[match["color"]] = recent_colors.get(match["color"], 0) + 1
             recent_styles[match["style"]] = recent_styles.get(match["style"], 0) + 1
 
+    # Extract all text for keyword matching
+    text = (title + " " + (content or "")).lower()
+    
+    keyword_map = {
+        "code": ["code", "program", "develop", "software", "python", "rust", "js", "typescript", "git", "github", "compiler", "coding", "algorithm", "developer", "engineering", "debugging", "ide", "vscode"],
+        "datacenter": ["server", "cloud", "database", "host", "infra", "datacenter", "scale", "aws", "network", "kubernetes", "docker", "security", "encryption", "devops", "deploy", "postgres", "mysql", "redis", "mongodb"],
+        "hardware": ["hardware", "chip", "cpu", "gpu", "nvidia", "intel", "amd", "processor", "silicon", "semiconductor", "circuit", "transistor", "motherboard", "tpu", "ram"],
+        "device": ["phone", "laptop", "device", "iphone", "android", "mobile", "screen", "monitor", "tablet", "watch", "hardware", "gadget"],
+        "workspace": ["workspace", "office", "team", "design", "ux", "ui", "remote", "desk", "work", "collaboration", "startup", "management", "agile", "product", "saas"],
+        "abstract": ["ai", "model", "llm", "neural", "learning", "intelligence", "quantum", "future", "concept", "algorithm", "theory", "math", "gpt", "gemini", "claude", "meta", "openai", "copilot"]
+    }
+    
+    matched_themes = []
+    for theme, keywords in keyword_map.items():
+        if any(kw in text for kw in keywords):
+            matched_themes.append(theme)
+            
     best_image = None
     best_score = -9999
     
@@ -70,15 +87,22 @@ def select_diverse_fallback_image(recent_posts: list) -> str:
         color_count = recent_colors.get(candidate["color"], 0)
         style_count = recent_styles.get(candidate["style"], 0)
         
-        variety_penalty = (theme_count * 10) + (color_count * 10) + (style_count * 10)
-        jitter = random.uniform(0, 1)
+        variety_penalty = (theme_count * 15) + (color_count * 10) + (style_count * 10)
         
-        score = - variety_penalty + similarity_penalty + jitter
+        # 3. Relevance Bonus
+        relevance_bonus = 0
+        if candidate["theme"] in matched_themes:
+            relevance_bonus = 40  # strong boost for matching the article's topic keywords
+            
+        jitter = random.uniform(0, 5)
+        
+        score = relevance_bonus - variety_penalty + similarity_penalty + jitter
         if score > best_score:
             best_score = score
             best_image = url
             
     return best_image or FALLBACK_IMAGES_REGISTRY[0]["url"]
+
 
 def get_clean_fallback_caption(title: str, content: str, recent_posts: list) -> str:
     """
@@ -370,7 +394,7 @@ class AutomationPipeline:
                     elif img_url in recent_urls:
                         is_scraped_invalid = True
                         
-                final_image_url = img_url if (img_url and not is_scraped_invalid) else select_diverse_fallback_image(recent_posts)
+                final_image_url = img_url if (img_url and not is_scraped_invalid) else select_relevant_fallback_image(story.title, story.content, recent_posts)
 
                 # Create Post record
                 post = Post(
@@ -385,6 +409,11 @@ class AutomationPipeline:
                 db.add(post)
                 db.commit()
                 generated_count += 1
+                
+                # Update recent_posts list in-memory so subsequent iterations in this run
+                # avoid selecting the same image.
+                recent_posts.insert(0, post)
+                recent_urls.insert(0, final_image_url)
                 
                 # 6. Generate Social Card
                 try:

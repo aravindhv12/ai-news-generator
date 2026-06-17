@@ -200,22 +200,54 @@ function App() {
     }
   };
 
-  // Approve Post: transitions to QUEUED
+  // Approve Post: transitions to QUEUED (Optimistic Update)
   const approvePost = async (id: string) => {
+    const previousPosts = [...posts];
+    const previousStats = { ...stats };
+
+    // Update state immediately
+    setPosts(prevPosts =>
+      prevPosts.map(p => (p.id === id ? { ...p, status: 'QUEUED' } : p))
+    );
+    setStats(prevStats => ({
+      ...prevStats,
+      draft: Math.max(0, prevStats.draft - 1),
+      queued: prevStats.queued + 1
+    }));
+
     try {
       await api.post('/api/posts/approve', { post_id: id });
-      await fetchData();
+      fetchData(); // Silently refresh
     } catch (err) {
+      // Rollback on error
+      setPosts(previousPosts);
+      setStats(previousStats);
       alert("Failed to approve post.");
     }
   };
 
-  // Reject Post: transitions to REJECTED and generates replacement
+  // Reject Post: transitions to REJECTED and generates replacement (Optimistic Update)
   const rejectPost = async (id: string) => {
+    const previousPosts = [...posts];
+    const previousStats = { ...stats };
+
+    // Update state immediately
+    setPosts(prevPosts =>
+      prevPosts.map(p => (p.id === id ? { ...p, status: 'REJECTED' } : p))
+    );
+    setStats(prevStats => ({
+      ...prevStats,
+      draft: Math.max(0, prevStats.draft - 1),
+      rejected: prevStats.rejected + 1
+    }));
+
     try {
       await api.post('/api/posts/reject', { post_id: id });
-      await fetchData();
+      await fetchData(); // Fetch again since rejection creates a replacement
     } catch (err) {
+      // Rollback on error
+      setPosts(previousPosts);
+      setStats(previousStats);
       alert("Failed to reject post.");
     }
   };
