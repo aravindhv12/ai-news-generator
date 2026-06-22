@@ -9,8 +9,25 @@ class AIService:
     def __init__(self):
         self.base_url = settings.OLLAMA_BASE_URL
         self.model = settings.OLLAMA_MODEL
+        self._is_online = None
+
+    async def check_online(self) -> bool:
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(f"{self.base_url}/", timeout=1.5)
+                is_ok = resp.status_code == 200
+                self._is_online = is_ok
+                return is_ok
+        except Exception:
+            self._is_online = False
+            return False
 
     async def generate_completion(self, prompt: str, system_prompt: str = "") -> str:
+        # If we already checked and Ollama is offline, bypass the HTTP request immediately
+        if self._is_online is False:
+            logger.warning("Bypassing Ollama query: AI Service is offline.")
+            return ""
+
         logger.info(f"Querying Ollama with model: {self.model}")
         try:
             async with httpx.AsyncClient() as client:
@@ -22,15 +39,17 @@ class AIService:
                         "system": system_prompt,
                         "stream": False
                     },
-                    timeout=60.0
+                    timeout=8.0
                 )
                 if response.status_code == 200:
+                    self._is_online = True
                     return response.json().get("response", "").strip()
                 else:
                     logger.error(f"Ollama error: {response.text}")
                     return ""
         except Exception as e:
             logger.error(f"Failed to connect to Ollama: {e}")
+            self._is_online = False
             return ""
 
     async def rank_news(self, title: str, summary: str) -> float:

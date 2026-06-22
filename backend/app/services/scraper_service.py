@@ -8,7 +8,7 @@ class ScraperService:
     async def extract_og_image(self, url: str) -> str:
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.get(url, timeout=10.0, follow_redirects=True)
+                resp = await client.get(url, timeout=4.0, follow_redirects=True)
                 soup = BeautifulSoup(resp.text, 'html.parser')
                 
                 # Check OpenGraph

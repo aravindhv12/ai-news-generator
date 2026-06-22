@@ -28,13 +28,13 @@ class RankingEngine:
                     logger.warning(f"Failed to rank story {item.id}, using default: {e}")
                     item.importance_score = 5.0
                 item.processed = True
-                try:
-                    db.commit()
-                except Exception as e:
-                    db.rollback()
-                    logger.error(f"Failed to commit rank for news story {item.id}: {e}")
 
         await asyncio.gather(*(rank_story(item) for item in unprocessed))
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to commit ranks for news stories: {e}")
     
     async def select_top_stories(self, db: Session, limit: int = 4):
         from app.models.models import News

@@ -43,6 +43,22 @@ function App() {
   const [scanning, setScanning] = useState(false);
   const [customCount, setCustomCount] = useState<number>(4);
 
+  // Dynamic Settings State
+  const [settingsForm, setSettingsForm] = useState({
+    PROJECT_NAME: '',
+    OLLAMA_BASE_URL: '',
+    OLLAMA_MODEL: '',
+    INSTAGRAM_ACCESS_TOKEN: '',
+    INSTAGRAM_BUSINESS_ID: '',
+    PUBLIC_HOST: '',
+    CRON_SECRET: ''
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsStatus, setSettingsStatus] = useState('');
+
+  // Processing state for post actions to prevent double click
+  const [processingPostIds, setProcessingPostIds] = useState<string[]>([]);
+
   // Redesigned dashboard state variables
   const [stats, setStats] = useState({
     total: 0,
@@ -107,6 +123,16 @@ function App() {
     }
   }, [token, api]);
 
+  const fetchSettings = useCallback(async () => {
+    if (!token) return;
+    try {
+      const resp = await api.get('/api/settings');
+      setSettingsForm(resp.data);
+    } catch (err) {
+      console.error("Failed to fetch settings:", err);
+    }
+  }, [token, api]);
+
   // Analytics States
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [sourceStats, setSourceStats] = useState<any>(null);
@@ -133,9 +159,9 @@ function App() {
   useEffect(() => {
     if (token) {
       setLoading(true);
-      fetchData().finally(() => setLoading(false));
+      Promise.all([fetchData(), fetchSettings()]).finally(() => setLoading(false));
     }
-  }, [token, fetchData]);
+  }, [token, fetchData, fetchSettings]);
 
   // Load analytics when switching to the view
   useEffect(() => {
@@ -152,6 +178,7 @@ function App() {
     }, 2000);
     return () => clearInterval(interval);
   }, [token, fetchData]);
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,8 +227,11 @@ function App() {
     }
   };
 
-  // Approve Post: transitions to QUEUED (Optimistic Update)
+  // Approve Post: transitions to QUEUED (Optimistic Update with double click protection)
   const approvePost = async (id: string) => {
+    if (processingPostIds.includes(id)) return;
+    setProcessingPostIds(prev => [...prev, id]);
+
     const previousPosts = [...posts];
     const previousStats = { ...stats };
 
@@ -223,11 +253,16 @@ function App() {
       setPosts(previousPosts);
       setStats(previousStats);
       alert("Failed to approve post.");
+    } finally {
+      setProcessingPostIds(prev => prev.filter(item => item !== id));
     }
   };
 
-  // Reject Post: transitions to REJECTED and generates replacement (Optimistic Update)
+  // Reject Post: transitions to REJECTED and generates replacement (Optimistic Update with double click protection)
   const rejectPost = async (id: string) => {
+    if (processingPostIds.includes(id)) return;
+    setProcessingPostIds(prev => [...prev, id]);
+
     const previousPosts = [...posts];
     const previousStats = { ...stats };
 
@@ -249,6 +284,8 @@ function App() {
       setPosts(previousPosts);
       setStats(previousStats);
       alert("Failed to reject post.");
+    } finally {
+      setProcessingPostIds(prev => prev.filter(item => item !== id));
     }
   };
 
@@ -261,6 +298,23 @@ function App() {
       alert("Failed to trigger publish queue processing.");
     }
   };
+
+  // Save Settings to Backend
+  const saveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSettings(true);
+    setSettingsStatus('');
+    try {
+      await api.post('/api/settings', settingsForm);
+      setSettingsStatus('Settings updated successfully!');
+      fetchSettings();
+    } catch (err) {
+      setSettingsStatus('Failed to update settings. Please try again.');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
 
   const formatTime = (isoString: string | null) => {
     if (!isoString) return 'Never';
@@ -296,9 +350,9 @@ function App() {
   return (
     <div className="dashboard fade-in">
       <aside className="sidebar">
-        <div className="logo pulse">
+        <div className="logo">
           <Activity size={32} />
-          <span>Guess</span>
+          <span>{settingsForm.PROJECT_NAME || 'Guess'}</span>
         </div>
         <nav>
           <button className={`nav-button ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}>
@@ -320,8 +374,9 @@ function App() {
         <header>
           <div>
             <h1 className="slide-up">{view.charAt(0).toUpperCase() + view.slice(1)}</h1>
-            <p className="subtitle">Production AI Social Media Platform.</p>
+            <p className="subtitle">Tech Social Card Automation Engine.</p>
           </div>
+
           {view === 'dashboard' && (
             <div className="header-actions">
               <button className="btn btn-secondary" onClick={fetchData}>
@@ -449,13 +504,34 @@ function App() {
                           <h3 className="post-title">{post.title}</h3>
                           <p className="post-caption">{post.caption}</p>
                           <div className="card-actions">
-                            <button className="btn btn-primary" onClick={() => approvePost(post.id)}>
-                              <ThumbsUp size={16} /> Approve
+                            <button 
+                              className="btn btn-primary" 
+                              onClick={() => approvePost(post.id)} 
+                              disabled={processingPostIds.includes(post.id)}
+                            >
+                              {processingPostIds.includes(post.id) ? (
+                                <Loader2 className="spin" size={16} />
+                              ) : (
+                                <>
+                                  <ThumbsUp size={16} /> Approve
+                                </>
+                              )}
                             </button>
-                            <button className="btn btn-danger" onClick={() => rejectPost(post.id)}>
-                              <ThumbsDown size={16} /> Reject
+                            <button 
+                              className="btn btn-danger" 
+                              onClick={() => rejectPost(post.id)} 
+                              disabled={processingPostIds.includes(post.id)}
+                            >
+                              {processingPostIds.includes(post.id) ? (
+                                <Loader2 className="spin" size={16} />
+                              ) : (
+                                <>
+                                  <ThumbsDown size={16} /> Reject
+                                </>
+                              )}
                             </button>
                           </div>
+
                         </div>
                       </article>
                     ))
@@ -682,93 +758,150 @@ function App() {
               </div>
             </header>
 
-            <div className="slide-up" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            <form onSubmit={saveSettings} className="slide-up" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
               {/* Settings Card 1: Platform & Rebranding */}
               <div className="dashboard-section" style={{ height: 'auto' }}>
                 <div className="section-header">
                   <h3>Brand & Styling Configuration</h3>
                   <Sparkles size={16} style={{ color: 'var(--primary)' }} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '0.5rem 0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', padding: '0.5rem 0' }}>
+                  <div className="settings-row">
                     <div>
                       <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Active Brand Identifier</div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Registered name for Navbar, Sidebar, and card overlay assets</div>
                     </div>
-                    <span style={{ background: 'rgba(0, 255, 127, 0.08)', color: 'var(--primary)', padding: '6px 12px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 800 }}>
-                      Guess
-                    </span>
+                    <input 
+                      type="text" 
+                      className="settings-input" 
+                      value={settingsForm.PROJECT_NAME} 
+                      onChange={e => setSettingsForm({...settingsForm, PROJECT_NAME: e.target.value})} 
+                      required 
+                    />
                   </div>
-                  <hr style={{ borderColor: '#15151a', margin: '0.5rem 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="settings-row">
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Card branding watermark</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Overlay text written onto generated Pillow social images</div>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Public Hostname URL</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Used as base for Instagram post webhook images</div>
                     </div>
-                    <span style={{ background: '#1c1c22', color: '#fff', padding: '6px 12px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700 }}>
-                      GUESS
-                    </span>
+                    <input 
+                      type="text" 
+                      className="settings-input" 
+                      value={settingsForm.PUBLIC_HOST} 
+                      onChange={e => setSettingsForm({...settingsForm, PUBLIC_HOST: e.target.value})} 
+                      required 
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Settings Card 2: Environment Keys Integration */}
+              {/* Settings Card 2: AI Engine Configuration */}
+              <div className="dashboard-section" style={{ height: 'auto' }}>
+                <div className="section-header">
+                  <h3>AI Content Generator Configuration</h3>
+                  <Sparkles size={16} style={{ color: 'var(--warning)' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', padding: '0.5rem 0' }}>
+                  <div className="settings-row">
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Ollama Base URL</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Target address of the offline Ollama service (default: localhost:11434)</div>
+                    </div>
+                    <input 
+                      type="text" 
+                      className="settings-input" 
+                      value={settingsForm.OLLAMA_BASE_URL} 
+                      onChange={e => setSettingsForm({...settingsForm, OLLAMA_BASE_URL: e.target.value})} 
+                      required 
+                    />
+                  </div>
+                  <div className="settings-row">
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Ollama Model Name</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Large language model identifier loaded on Ollama service</div>
+                    </div>
+                    <input 
+                      type="text" 
+                      className="settings-input" 
+                      value={settingsForm.OLLAMA_MODEL} 
+                      onChange={e => setSettingsForm({...settingsForm, OLLAMA_MODEL: e.target.value})} 
+                      required 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Settings Card 3: Secrets & Environment Integration */}
               <div className="dashboard-section" style={{ height: 'auto' }}>
                 <div className="section-header">
                   <h3>Secrets & Environment Integration</h3>
                   <Lock size={16} style={{ color: 'var(--accent)' }} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem', padding: '0.5rem 0' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--primary)' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', padding: '0.5rem 0' }}>
+                  <div className="settings-row">
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>DATABASE_URL</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Active connection pooler linked.</div>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Instagram Access Token</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Bearer API token granted by Meta Developers console</div>
                     </div>
+                    <input 
+                      type="password" 
+                      className="settings-input" 
+                      placeholder="••••••••••••••••" 
+                      value={settingsForm.INSTAGRAM_ACCESS_TOKEN} 
+                      onChange={e => setSettingsForm({...settingsForm, INSTAGRAM_ACCESS_TOKEN: e.target.value})} 
+                    />
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--primary)' }} />
+                  <div className="settings-row">
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>JWT_SECRET</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Security signing key configured.</div>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Instagram Business ID</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Unique Meta business account identifier linking to Instagram page</div>
                     </div>
+                    <input 
+                      type="text" 
+                      className="settings-input" 
+                      value={settingsForm.INSTAGRAM_BUSINESS_ID} 
+                      onChange={e => setSettingsForm({...settingsForm, INSTAGRAM_BUSINESS_ID: e.target.value})} 
+                    />
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--primary)' }} />
+                  <div className="settings-row">
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Vercel CRON_SECRET</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Injected auth header verified.</div>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Vercel Cron Secret</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Security validation string authorizing Vercel daily automation requests</div>
                     </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--warning)' }} />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>INSTAGRAM_ACCESS_TOKEN</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Not configured (Pluggable Mock active).</div>
-                    </div>
+                    <input 
+                      type="password" 
+                      className="settings-input" 
+                      placeholder="••••••••••••••••" 
+                      value={settingsForm.CRON_SECRET} 
+                      onChange={e => setSettingsForm({...settingsForm, CRON_SECRET: e.target.value})} 
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Settings Card 3: Cron Schedules */}
-              <div className="dashboard-section" style={{ height: 'auto' }}>
-                <div className="section-header">
-                  <h3>Daily Automation Tasks</h3>
-                  <Clock size={16} style={{ color: 'var(--warning)' }} />
+              {settingsStatus && (
+                <div style={{ 
+                  padding: '1rem', 
+                  borderRadius: '12px', 
+                  backgroundColor: settingsStatus.includes('successfully') ? 'rgba(52, 199, 89, 0.1)' : 'rgba(255, 59, 48, 0.1)',
+                  color: settingsStatus.includes('successfully') ? 'var(--success)' : 'var(--error)',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  {settingsStatus.includes('successfully') ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+                  {settingsStatus}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '0.5rem 0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem' }}>
-                    <div style={{ fontWeight: 600 }}>Cron Generate: `0 8 * * *` (8:00 AM UTC)</div>
-                    <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Active</span>
-                  </div>
-                  <hr style={{ borderColor: '#15151a', margin: '0.3rem 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem' }}>
-                    <div style={{ fontWeight: 600 }}>Cron Cleanup: `0 0 * * *` (12:00 AM UTC)</div>
-                    <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Active</span>
-                  </div>
-                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                <button type="submit" className="btn btn-primary" disabled={savingSettings} style={{ width: '180px' }}>
+                  {savingSettings ? <Loader2 className="spin" size={16} /> : 'Save Changes'}
+                </button>
               </div>
-            </div>
+            </form>
           </div>
         )}
       </main>

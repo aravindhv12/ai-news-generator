@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, BackgroundTasks
 from sqlalchemy.orm import Session
-from app.db.session import get_db
-from app.models.models import Post, News, GenerationRun, PublishQueue, PublishLog, ActivityLog
-from typing import List, Dict, Any
+from app.db.session import get_db, SessionLocal
+from app.models.models import Post, News, GenerationRun, PublishQueue, PublishLog, ActivityLog, SystemSetting
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 import uuid
 from datetime import datetime, timedelta
+
+import os
 
 from app.api.deps import get_current_user
 from app.services.publisher import publisher_service
@@ -24,6 +26,41 @@ class GenerateRequest(BaseModel):
 
 class ActionRequest(BaseModel):
     post_id: str
+
+class SettingsUpdateRequest(BaseModel):
+    PROJECT_NAME: Optional[str] = None
+    OLLAMA_BASE_URL: Optional[str] = None
+    OLLAMA_MODEL: Optional[str] = None
+    INSTAGRAM_ACCESS_TOKEN: Optional[str] = None
+    INSTAGRAM_BUSINESS_ID: Optional[str] = None
+    PUBLIC_HOST: Optional[str] = None
+    CRON_SECRET: Optional[str] = None
+
+# Background Task helpers
+async def bg_run_generation(limit: int, source: str):
+    db = SessionLocal()
+    try:
+        await pipeline.run_generation(db, limit=limit, source=source)
+    except Exception as e:
+        logger.error(f"Background run_generation failed: {e}")
+    finally:
+        db.close()
+
+async def bg_reject_replacement(post_id: str, source: str):
+    db = SessionLocal()
+    try:
+        await pipeline.run_generation(db, limit=1, source=source)
+        db.add(ActivityLog(
+            action="regenerate_replacement",
+            entity_type="post",
+            entity_id=post_id
+        ))
+        db.commit()
+    except Exception as e:
+        logger.error(f"Background reject_replacement failed: {e}")
+    finally:
+        db.close()
+
 
 # PUBLIC ENDPOINTS
 @router.get("/health")
@@ -46,7 +83,7 @@ def get_post(post_id: str, db: Session = Depends(get_db), current_user: Any = De
     return post
 
 @router.post("/generate")
-async def generate_posts(req: GenerateRequest, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):
+async def generate_posts(req: GenerateRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):
     """
     Manually generate a custom amount of posts immediately.
     """
@@ -56,11 +93,9 @@ async def generate_posts(req: GenerateRequest, db: Session = Depends(get_db), cu
     if last_run and last_run.started_at > thirty_seconds_ago:
         raise HTTPException(status_code=429, detail="Too many generation requests. Please wait 30 seconds.")
 
-    try:
-        count = await pipeline.run_generation(db, limit=req.count, source="MANUAL")
-        return {"message": "Manual generation completed", "generated_count": count}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    pipeline.status = "running"
+    background_tasks.add_task(bg_run_generation, req.count, "MANUAL")
+    return {"message": "Manual generation started in background"}
 
 @router.post("/posts/approve")
 def approve_post(req: ActionRequest, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):
@@ -100,10 +135,10 @@ def approve_post(req: ActionRequest, db: Session = Depends(get_db), current_user
     return {"message": "Post approved and queued for publishing", "post_id": post.id}
 
 @router.post("/posts/reject")
-async def reject_post(req: ActionRequest, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):
+async def reject_post(req: ActionRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):
     """
     Reject flow: DRAFT -> REJECTED.
-    Immediately generates 1 unique replacement post.
+    Immediately generates 1 unique replacement post in background.
     """
     post = db.query(Post).filter(Post.id == req.post_id).first()
     if not post:
@@ -129,23 +164,17 @@ async def reject_post(req: ActionRequest, db: Session = Depends(get_db), current
         Post.status.in_(["DRAFT", "QUEUED", "PUBLISHING", "FAILED"])
     ).count()
     
-    replacement_count = 0
+    replacement_triggered = False
     if available_posts < 12:
         source = post.generation_source or "MANUAL"
-        replacement_count = await pipeline.run_generation(db, limit=1, source=source)
-        
-        # Log regeneration
-        db.add(ActivityLog(
-            action="regenerate_replacement",
-            entity_type="post",
-            entity_id=post.id
-        ))
-        db.commit()
+        pipeline.status = "running"
+        background_tasks.add_task(bg_reject_replacement, post.id, source)
+        replacement_triggered = True
     
     return {
         "message": "Post rejected successfully",
         "original_post_id": post.id,
-        "replacement_generated": replacement_count > 0,
+        "replacement_generated": replacement_triggered,
         "inventory_count": available_posts
     }
 
@@ -166,15 +195,18 @@ def get_dashboard_data(db: Session = Depends(get_db), current_user: Any = Depend
     """
     Exposes statistics and feeds for the dashboard page.
     """
-    # 1. Total and status counts
-    total = db.query(Post).count()
-    draft = db.query(Post).filter(Post.status == "DRAFT").count()
-    approved = db.query(Post).filter(Post.status == "APPROVED").count() # Deprecated, queued represents approved
-    queued = db.query(Post).filter(Post.status == "QUEUED").count()
-    publishing = db.query(Post).filter(Post.status == "PUBLISHING").count()
-    published = db.query(Post).filter(Post.status == "PUBLISHED").count()
-    rejected = db.query(Post).filter(Post.status == "REJECTED").count()
-    failed = db.query(Post).filter(Post.status == "FAILED").count()
+    # 1. Total and status counts (Optimized using SQLAlchemy group_by query)
+    from sqlalchemy import func
+    status_counts = dict(db.query(Post.status, func.count(Post.id)).group_by(Post.status).all())
+    
+    total = sum(status_counts.values())
+    draft = status_counts.get("DRAFT", 0)
+    approved = status_counts.get("APPROVED", 0)
+    queued = status_counts.get("QUEUED", 0)
+    publishing = status_counts.get("PUBLISHING", 0)
+    published = status_counts.get("PUBLISHED", 0)
+    rejected = status_counts.get("REJECTED", 0)
+    failed = status_counts.get("FAILED", 0)
 
     # Available inventory = DRAFT + QUEUED + PUBLISHING + FAILED
     inventory_count = draft + queued + publishing + failed
@@ -301,3 +333,42 @@ async def cron_auto_cleanup(db: Session = Depends(get_db)):
     logger.info("Vercel Cron: Triggering daily cleanup...")
     result = await pipeline.run_cleanup(db)
     return {"message": "Cleanup cron completed", "result": result}
+
+# System settings management endpoints
+@router.get("/settings")
+def get_settings(db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):
+    """
+    Get all dynamic system settings merged with in-memory fallback defaults.
+    """
+    db_settings = {s.key: s.value for s in db.query(SystemSetting).all()}
+    return {
+        "PROJECT_NAME": db_settings.get("PROJECT_NAME") or settings.PROJECT_NAME,
+        "OLLAMA_BASE_URL": db_settings.get("OLLAMA_BASE_URL") or settings.OLLAMA_BASE_URL,
+        "OLLAMA_MODEL": db_settings.get("OLLAMA_MODEL") or settings.OLLAMA_MODEL,
+        "INSTAGRAM_ACCESS_TOKEN": db_settings.get("INSTAGRAM_ACCESS_TOKEN") or settings.INSTAGRAM_ACCESS_TOKEN or "",
+        "INSTAGRAM_BUSINESS_ID": db_settings.get("INSTAGRAM_BUSINESS_ID") or settings.INSTAGRAM_BUSINESS_ID or "",
+        "PUBLIC_HOST": db_settings.get("PUBLIC_HOST") or settings.PUBLIC_HOST,
+        "CRON_SECRET": db_settings.get("CRON_SECRET") or settings.CRON_SECRET or "",
+    }
+
+@router.post("/settings")
+def update_settings(req: SettingsUpdateRequest, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):
+    """
+    Save settings to database and dynamically apply them in-memory to backend config settings.
+    """
+    update_dict = req.dict(exclude_unset=True)
+    for key, value in update_dict.items():
+        db_setting = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+        if not db_setting:
+            db_setting = SystemSetting(key=key, value=value)
+            db.add(db_setting)
+        else:
+            db_setting.value = value
+        
+        # Apply in-memory override immediately
+        if hasattr(settings, key):
+            setattr(settings, key, value)
+            
+    db.commit()
+    return {"message": "Settings updated successfully"}
+

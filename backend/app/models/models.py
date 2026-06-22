@@ -92,3 +92,10 @@ class ActivityLog(Base):
     entity_type = Column(String, nullable=False) # e.g. post, generation_run
     entity_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+    
+    key = Column(String, primary_key=True)
+    value = Column(String, nullable=True)
+

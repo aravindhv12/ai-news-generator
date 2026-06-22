@@ -5,6 +5,8 @@ import os
 import logging
 from typing import Optional
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 class SocialCardGenerator:
@@ -14,11 +16,38 @@ class SocialCardGenerator:
         else:
             self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
-        # In production, these fonts should be in an assets folder
-        self.font_bold = "/System/Library/Fonts/HelveticaNeue.ttc" # Mac default
-        self.font_regular = "/System/Library/Fonts/HelveticaNeue.ttc"
+        
+        # Downloaded fonts directory
+        self.font_dir = os.path.abspath(os.path.join(self.output_dir, "../fonts"))
+        os.makedirs(self.font_dir, exist_ok=True)
+        self.font_bold_path = os.path.join(self.font_dir, "Inter-Bold.ttf")
+        self.font_regular_path = os.path.join(self.font_dir, "Inter-Regular.ttf")
+        
+        self.font_bold = self.font_bold_path
+        self.font_regular = self.font_regular_path
+
+    async def ensure_fonts(self):
+        # Download fonts if they do not exist
+        async with httpx.AsyncClient() as client:
+            font_sources = [
+                ("Lato-Bold.ttf", self.font_bold_path),
+                ("Lato-Regular.ttf", self.font_regular_path)
+            ]
+            for source_name, path in font_sources:
+                if not os.path.exists(path):
+                    try:
+                        logger.info(f"Downloading {source_name} from Google Fonts...")
+                        url = f"https://raw.githubusercontent.com/google/fonts/main/ofl/lato/{source_name}"
+                        resp = await client.get(url, follow_redirects=True, timeout=15.0)
+                        if resp.status_code == 200:
+                            with open(path, "wb") as f:
+                                f.write(resp.content)
+                            logger.info(f"Successfully downloaded {source_name} as {os.path.basename(path)}")
+                    except Exception as e:
+                        logger.error(f"Failed to download font {source_name}: {e}")
 
     async def download_image(self, url: str) -> Optional[Image.Image]:
+
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(url, timeout=10.0)
@@ -78,7 +107,8 @@ class SocialCardGenerator:
         
         # Draw Brand Accent Label (aligned to bottom)
         brand_y = height - 90
-        draw.text((padding, brand_y), "GUESS", font=font_h, fill=accent_color)
+        brand_name = settings.PROJECT_NAME.upper()
+        draw.text((padding, brand_y), brand_name, font=font_h, fill=accent_color)
         
         output_path = os.path.join(self.output_dir, f"{post_id}.png")
         card.save(output_path)

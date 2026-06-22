@@ -70,12 +70,28 @@ async def start_scheduler():
     from app.db.session import engine
     Base.metadata.create_all(bind=engine)
 
+    # Load settings from db and apply to settings object
+    db = SessionLocal()
+    try:
+        from app.models.models import SystemSetting
+        db_settings = db.query(SystemSetting).all()
+        for s in db_settings:
+            if hasattr(settings, s.key) and s.value is not None:
+                setattr(settings, s.key, s.value)
+    except Exception as e:
+        logging.error(f"Failed to load system settings from database: {e}")
+    finally:
+        db.close()
+
+    # Ensure social card fonts are loaded
+    from app.services.image_service import image_service
+    await image_service.ensure_fonts()
+
     # 1. Schedule auto generation run every 2 hours
-    def scheduled_generate():
+    async def scheduled_generate():
         db = SessionLocal()
         try:
-            import asyncio
-            asyncio.create_task(pipeline.run_generation(db, limit=4, source="AUTO"))
+            await pipeline.run_generation(db, limit=4, source="AUTO")
         except Exception as e:
             logging.error(f"Scheduler generate task failed: {e}")
         finally:
@@ -84,11 +100,10 @@ async def start_scheduler():
     scheduler.add_job(scheduled_generate, 'interval', hours=2)
     
     # 2. Schedule publish queue processing every 30 minutes
-    def scheduled_publish():
+    async def scheduled_publish():
         db = SessionLocal()
         try:
-            import asyncio
-            asyncio.create_task(publisher_service.process_queue(db, public_host=settings.PUBLIC_HOST))
+            await publisher_service.process_queue(db, public_host=settings.PUBLIC_HOST)
         except Exception as e:
             logging.error(f"Scheduler publish task failed: {e}")
         finally:
@@ -97,6 +112,7 @@ async def start_scheduler():
     scheduler.add_job(scheduled_publish, 'interval', minutes=30)
     
     scheduler.start()
+
 
 @app.get("/")
 async def root():

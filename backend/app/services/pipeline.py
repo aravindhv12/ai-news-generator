@@ -213,6 +213,9 @@ class AutomationPipeline:
         Enforces inventory thresholds (min 12 posts) to optimize AI credits.
         Generates posts in a single batch call.
         """
+        # Fast connection check to Ollama
+        await ai_service.check_online()
+
         # Prevent overlapping runs
         fifteen_minutes_ago = datetime.utcnow() - timedelta(minutes=15)
         overlapping_run = db.query(GenerationRun).filter(
