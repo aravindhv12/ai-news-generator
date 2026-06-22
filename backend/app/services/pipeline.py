@@ -145,16 +145,16 @@ def get_clean_fallback_caption(title: str, content: str, recent_posts: list) -> 
     ]
     
     ctas = [
-        "What's your plan for this?",
-        "Will you adopt this tool?",
-        "Ready to implement this next?",
-        "What are your key thoughts?",
-        "How will this impact you?",
-        "Is your stack ready yet?",
-        "What are your core concerns?",
-        "Would you try this today?",
-        "How does this affect you?",
-        "What is your next project?"
+        "Explore how this updates standard deployment workflows.",
+        "Integrate these modern tools to optimize developer experience.",
+        "Ensure your team remains aligned with current technology trends.",
+        "Evaluate this architectural change for your production stack.",
+        "Consider this framework for your upcoming software systems.",
+        "Standardize on these updates to enhance long-term scalability.",
+        "Review this development to secure cleaner system integrations.",
+        "Leverage these design principles to reduce system overhead.",
+        "Analyze these results to boost overall system efficiency.",
+        "Incorporate this update to keep your software stack robust."
     ]
     
     # Extract first sentences (hooks) and full captions of recent posts to avoid duplication
@@ -244,9 +244,19 @@ class AutomationPipeline:
             Post.status.in_(["DRAFT", "QUEUED", "PUBLISHING", "FAILED"])
         ).count()
         
-        # Min inventory threshold is 12 posts
-        if available_posts >= 12:
-            logger.info(f"Inventory threshold satisfied (have {available_posts} posts >= 12). Skipping AI generation.")
+        # Check today's auto-generated posts count to ensure we hit the 4 posts/day quota
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_auto_count = db.query(Post).filter(
+            Post.generation_source == "AUTO",
+            Post.created_at >= today_start
+        ).count()
+
+        needed_for_inventory = 12 - available_posts
+        needed_for_quota = 4 - today_auto_count
+        needed = max(needed_for_inventory, needed_for_quota)
+
+        if needed <= 0:
+            logger.info(f"Pipeline run skipped: Inventory threshold satisfied (have {available_posts} posts >= 12) and today's auto quota of 4 reached ({today_auto_count}).")
             # Record skipped run
             skipped_run = GenerationRun(
                 source=source,
@@ -264,9 +274,8 @@ class AutomationPipeline:
             db.commit()
             return 0
             
-        needed = 12 - available_posts
         actual_limit = min(limit, needed)
-        logger.info(f"Inventory is {available_posts}/12 posts. Generating {actual_limit} missing posts.")
+        logger.info(f"Inventory is {available_posts}/12 posts. Today's auto-generated: {today_auto_count}/4. Generating {actual_limit} posts (needed: {needed}).")
 
         # Log run start
         run_log = GenerationRun(

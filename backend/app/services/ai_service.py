@@ -90,6 +90,7 @@ class AIService:
         - NO fragments, NO half thoughts, and NO truncated sentences ending in "...".
         - The total word count of the caption MUST be between 20 and 25 words. Do not deviate.
         - NEVER use generic AI words (e.g., "delve", "testament", "revolutionize", "tapestry", "moreover").
+        - The caption and CTA MUST NOT end with a question (e.g., do NOT write 'What are your thoughts?', 'How will you prepare?', or similar questions). Repetitive questions are strictly forbidden. Use a concise, professional closing statement.
         - Avoid generic motivational text or repetitive phrasing.
         - Ensure the language is natural, concise, professional, and social-media ready.
 
@@ -143,6 +144,7 @@ class AIService:
         - NO fragments, NO half thoughts, and NO truncated sentences ending in "...".
         - The total word count of the caption MUST be between 20 and 25 words. Do not deviate.
         - NEVER use generic AI words (e.g., "delve", "testament", "revolutionize", "tapestry", "moreover").
+        - The caption and CTA MUST NOT end with a question (e.g., do NOT write 'What are your thoughts?', 'How will you prepare?', or similar questions). Repetitive questions are strictly forbidden. Use a concise, professional closing statement.
         - Ensure language is natural, concise, professional, and social-media ready.
 
         You MUST return the output ONLY as a raw JSON object with the following key:

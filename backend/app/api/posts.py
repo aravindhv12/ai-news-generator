@@ -69,11 +69,11 @@ def health_check():
 
 # PROTECTED ENDPOINTS (User JWT required)
 @router.get("/posts")
-def get_posts(status: str = None, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):
+def get_posts(status: str = None, limit: int = 100, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):
     query = db.query(Post)
     if status:
         query = query.filter(Post.status == status)
-    return query.order_by(Post.created_at.desc()).all()
+    return query.order_by(Post.created_at.desc()).limit(limit).all()
 
 @router.get("/posts/{post_id}")
 def get_post(post_id: str, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):
@@ -317,11 +317,29 @@ def verify_cron_auth(authorization: str = Header(None)):
 async def cron_auto_generate(db: Session = Depends(get_db)):
     """
     Triggered by Vercel Cron every 2 hours.
-    Generates exactly 4 posts.
+    Generates exactly 4 posts with retry logic and failure monitoring.
     """
     logger.info("Vercel Cron: Triggering auto generation...")
-    count = await pipeline.run_generation(db, limit=4, source="AUTO")
-    return {"message": "Auto generation cron completed", "generated_count": count}
+    import asyncio
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            count = await pipeline.run_generation(db, limit=4, source="AUTO")
+            return {"message": "Auto generation cron completed", "generated_count": count}
+        except Exception as e:
+            logger.error(f"Vercel Cron auto generation attempt {attempt + 1} failed: {e}")
+            if attempt == max_attempts - 1:
+                # Log final failure to DB for monitoring / alerts
+                db.add(ActivityLog(
+                    action="cron_generate_failed",
+                    entity_type="system",
+                    entity_id=None
+                ))
+                db.commit()
+                # Critical warning alert logged
+                logger.critical(f"ALERT: Cron generation failed after {max_attempts} attempts. Error: {e}")
+                raise HTTPException(status_code=500, detail=f"Cron failed after {max_attempts} attempts: {e}")
+            await asyncio.sleep(2 ** attempt)
 
 @router.get("/cron/cleanup", dependencies=[Depends(verify_cron_auth)])
 @router.post("/cron/cleanup", dependencies=[Depends(verify_cron_auth)])
@@ -340,6 +358,9 @@ def get_settings(db: Session = Depends(get_db), current_user: Any = Depends(get_
     """
     Get all dynamic system settings merged with in-memory fallback defaults.
     """
+    if current_user != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden: Admin access only")
+
     db_settings = {s.key: s.value for s in db.query(SystemSetting).all()}
     return {
         "PROJECT_NAME": db_settings.get("PROJECT_NAME") or settings.PROJECT_NAME,
@@ -356,6 +377,9 @@ def update_settings(req: SettingsUpdateRequest, db: Session = Depends(get_db), c
     """
     Save settings to database and dynamically apply them in-memory to backend config settings.
     """
+    if current_user != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden: Admin access only")
+
     update_dict = req.dict(exclude_unset=True)
     for key, value in update_dict.items():
         db_setting = db.query(SystemSetting).filter(SystemSetting.key == key).first()

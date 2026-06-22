@@ -42,6 +42,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [customCount, setCustomCount] = useState<number>(4);
+  const [localGenerating, setLocalGenerating] = useState(false);
+  const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(60);
 
   // Dynamic Settings State
   const [settingsForm, setSettingsForm] = useState({
@@ -94,6 +97,25 @@ function App() {
     baseURL: apiBaseURL,
     headers: { Authorization: `Bearer ${token}` }
   }), [token, apiBaseURL]);
+
+  const loggedInUser = useMemo(() => {
+    if (!token) return null;
+    try {
+      const payloadBase64 = token.split('.')[1];
+      const decodedPayload = JSON.parse(atob(payloadBase64));
+      return decodedPayload.sub || null;
+    } catch (e) {
+      console.error("Error decoding token:", e);
+      return null;
+    }
+  }, [token]);
+
+  // Redirect non-admin away from settings
+  useEffect(() => {
+    if (view === 'settings' && loggedInUser && loggedInUser !== 'admin') {
+      setView('dashboard');
+    }
+  }, [view, loggedInUser]);
 
   const fetchData = useCallback(async () => {
     if (!token) return;
@@ -215,15 +237,74 @@ function App() {
     setPosts([]);
   };
 
+  // Inactivity tracking: warn at 9m, logout at 10m
+  useEffect(() => {
+    if (!token) return;
+
+    let warningTimer: any;
+    let logoutTimer: any;
+    let countdownInterval: any;
+
+    const resetTimers = () => {
+      setShowTimeoutWarning(false);
+      setTimeRemaining(60);
+      
+      if (warningTimer) clearTimeout(warningTimer);
+      if (logoutTimer) clearTimeout(logoutTimer);
+      if (countdownInterval) clearInterval(countdownInterval);
+
+      // Warning after 9 minutes (540 seconds)
+      warningTimer = setTimeout(() => {
+        setShowTimeoutWarning(true);
+        let timeLeft = 60;
+        countdownInterval = setInterval(() => {
+          timeLeft -= 1;
+          setTimeRemaining(timeLeft);
+          if (timeLeft <= 0) {
+            clearInterval(countdownInterval);
+          }
+        }, 1000);
+      }, 9 * 60 * 1000);
+
+      // Logout after 10 minutes (600 seconds)
+      logoutTimer = setTimeout(() => {
+        handleLogout();
+        alert("You have been logged out due to inactivity.");
+      }, 10 * 60 * 1000);
+    };
+
+    const events = ['mousemove', 'keydown', 'mousedown', 'scroll', 'touchstart'];
+    const handler = () => resetTimers();
+    
+    events.forEach(event => {
+      window.addEventListener(event, handler);
+    });
+
+    // Run initially
+    resetTimers();
+
+    return () => {
+      events.forEach(event => {
+        window.removeEventListener(event, handler);
+      });
+      if (warningTimer) clearTimeout(warningTimer);
+      if (logoutTimer) clearTimeout(logoutTimer);
+      if (countdownInterval) clearInterval(countdownInterval);
+    };
+  }, [token]);
+
   // Trigger manual generation
   const triggerGeneration = async (count: number) => {
-    setScanning(true);
+    setLocalGenerating(true);
     try {
       await api.post('/api/generate', { count });
-      await fetchData();
+      // Wait 3 seconds to let the background task start and register in the DB
+      setTimeout(() => {
+        setLocalGenerating(false);
+      }, 3000);
     } catch (err) {
-      setScanning(false);
-      alert("Failed to trigger generation.");
+      setLocalGenerating(false);
+      alert("Failed to trigger generation. Please check if you are within the 30 seconds rate limit.");
     }
   };
 
@@ -361,9 +442,11 @@ function App() {
           <button className={`nav-button ${view === 'analytics' ? 'active' : ''}`} onClick={() => setView('analytics')}>
             <BarChart2 size={20} /> Analytics
           </button>
-          <button className={`nav-button ${view === 'settings' ? 'active' : ''}`} onClick={() => setView('settings')}>
-            <SettingsIcon size={20} /> Settings
-          </button>
+          {loggedInUser === 'admin' && (
+            <button className={`nav-button ${view === 'settings' ? 'active' : ''}`} onClick={() => setView('settings')}>
+              <SettingsIcon size={20} /> Settings
+            </button>
+          )}
         </nav>
         <div className="sidebar-footer">
           <button className="nav-button logout-btn" onClick={handleLogout}>Log Out</button>
@@ -451,10 +534,12 @@ function App() {
                 <p>Generate fresh premium tech post drafts instantly to review and approve.</p>
               </div>
               <div className="control-actions">
-                <button className="btn btn-secondary" onClick={() => triggerGeneration(1)} disabled={scanning}>
+                <button className="btn btn-secondary" onClick={() => triggerGeneration(1)} disabled={scanning || localGenerating}>
+                  {scanning || localGenerating ? <Loader2 className="spin" size={14} style={{ marginRight: '6px', display: 'inline' }} /> : null}
                   Generate 1 Post
                 </button>
-                <button className="btn btn-secondary" onClick={() => triggerGeneration(4)} disabled={scanning}>
+                <button className="btn btn-secondary" onClick={() => triggerGeneration(4)} disabled={scanning || localGenerating}>
+                  {scanning || localGenerating ? <Loader2 className="spin" size={14} style={{ marginRight: '6px', display: 'inline' }} /> : null}
                   Generate 4 Posts
                 </button>
                 <div className="custom-range">
@@ -465,10 +550,11 @@ function App() {
                     max="10" 
                     value={customCount} 
                     onChange={(e) => setCustomCount(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))} 
+                    disabled={scanning || localGenerating}
                   />
-                  <button className="btn btn-primary" onClick={() => triggerGeneration(customCount)} disabled={scanning}>
-                    {scanning ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
-                    Generate Now
+                  <button className="btn btn-primary" onClick={() => triggerGeneration(customCount)} disabled={scanning || localGenerating}>
+                    {scanning || localGenerating ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
+                    {scanning || localGenerating ? 'Generating...' : 'Generate Now'}
                   </button>
                 </div>
               </div>
@@ -905,6 +991,19 @@ function App() {
           </div>
         )}
       </main>
+      {showTimeoutWarning && (
+        <div className="modal-overlay">
+          <div className="modal-content warning-modal">
+            <Clock className="warning-icon pulse" size={48} style={{ color: 'var(--warning)', marginBottom: '1rem' }} />
+            <h2>Session Timeout Warning</h2>
+            <p>You have been inactive. For your security, you will be logged out in <strong>{timeRemaining}</strong> seconds.</p>
+            <p>Move your mouse or press any key to stay logged in.</p>
+            <button className="btn btn-primary" onClick={() => setShowTimeoutWarning(false)}>
+              Keep Me Logged In
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

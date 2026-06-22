@@ -22,13 +22,22 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Normally check hashed password
-    if form_data.password != settings.ADMIN_PASSWORD:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    # Secure password check (checking hash if configured, otherwise fallback to plain text check)
+    is_hashed = settings.ADMIN_PASSWORD.startswith("$2b$") or settings.ADMIN_PASSWORD.startswith("$2a$")
+    if is_hashed:
+        if not verify_password(form_data.password, settings.ADMIN_PASSWORD):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    else:
+        if form_data.password != settings.ADMIN_PASSWORD:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
     access_token = create_access_token(subject=form_data.username)
     return {"access_token": access_token, "token_type": "bearer"}
