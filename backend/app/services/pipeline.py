@@ -387,7 +387,9 @@ class AutomationPipeline:
                     content = {
                         "headline": fallback_headline,
                         "caption": fallback_caption,
-                        "hashtags": clean_tags[:8]
+                        "hashtags": clean_tags[:8],
+                        "source_name": story.source,
+                        "source_url": story.url,
                     }
                 
                 img_url = scraped_images.get(story.id)
@@ -402,13 +404,23 @@ class AutomationPipeline:
                         
                 final_image_url = img_url if (img_url and not is_scraped_invalid) else select_relevant_fallback_image(story.title, story.content, recent_posts)
 
+                # Append Sources section to caption
+                raw_caption = content.get("caption") or ""
+                source_name = content.get("source_name") or story.source
+                source_url = content.get("source_url") or story.url
+                if source_url and source_url not in raw_caption:
+                    sources_block = f"\n\n📌 Source: {source_name}\n{source_url}"
+                    final_caption = raw_caption + sources_block
+                else:
+                    final_caption = raw_caption
+
                 hashtag_str = " ".join(content.get("hashtags", [])) if content.get("hashtags") else None
 
                 # Create Post record
                 post = Post(
                     news_id=story.id,
                     title=content.get("headline", story.title[:100]),
-                    caption=content.get("caption"),
+                    caption=final_caption,
                     hashtags=hashtag_str,
                     template="default",
                     generation_source=source,

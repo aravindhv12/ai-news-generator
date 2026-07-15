@@ -98,15 +98,15 @@ function App() {
   };
 
   const handleDownloadImage = (post: any) => {
-    // Open the backend download endpoint to serve the image directly as a PNG attachment
-    const downloadUrl = `${apiBaseURL}/api/posts/${post.id}/download?clean=false`;
+    // Route through backend /api/posts/{id}/download which serves raw bytes with attachment header
+    const downloadUrl = `${apiBaseURL}/api/posts/${post.id}/download`;
     const link = document.createElement('a');
     link.href = downloadUrl;
     link.download = `${post.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast("Downloading high-quality image... 📥");
+    showToast("Downloading image... 📥");
   };
 
   // Redesigned dashboard state variables

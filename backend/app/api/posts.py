@@ -402,29 +402,57 @@ def update_settings(req: SettingsUpdateRequest, db: Session = Depends(get_db), c
     db.commit()
     return {"message": "Settings updated successfully"}
 
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from app.services.image_service import image_service
+import httpx as _httpx
 
 @router.get("/posts/{post_id}/download")
-def download_post_image(post_id: str, clean: bool = False, db: Session = Depends(get_db)):
+async def download_post_image(post_id: str, db: Session = Depends(get_db)):
     """
-    Download route that resolves the local post image and serves it as an attachment, preventing CORS fetch issues.
+    Download the generated social card PNG for a post.
+    Reads raw bytes and returns them with Content-Disposition: attachment so the browser
+    triggers a native download dialog without any CORS issues.
+    Falls back to the original article image if the generated card is unavailable.
     """
-    filename = f"{post_id}_clean.png" if clean else f"{post_id}.png"
-    filepath = os.path.join(image_service.output_dir, filename)
+    # Try the generated card first
+    card_path = os.path.join(image_service.output_dir, f"{post_id}.png")
     
-    if not os.path.exists(filepath):
-        # Fallback to standard card image if clean crop is missing
-        if clean:
-            filename = f"{post_id}.png"
-            filepath = os.path.join(image_service.output_dir, filename)
-        if not os.path.exists(filepath):
-            raise HTTPException(status_code=404, detail="Image not found")
-            
-    # Serve file with Content-Disposition attachment headers
-    return FileResponse(
-        path=filepath,
-        media_type="image/png",
-        filename=filename
-    )
+    if os.path.exists(card_path):
+        with open(card_path, "rb") as f:
+            data = f.read()
+        return Response(
+            content=data,
+            media_type="image/png",
+            headers={
+                "Content-Disposition": f'attachment; filename="{post_id}.png"',
+                "Content-Length": str(len(data)),
+                "Cache-Control": "no-cache",
+            }
+        )
+    
+    # Card not on disk (Vercel ephemeral): fetch from the stored image_url
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    source_url = post.image_url
+    if not source_url:
+        raise HTTPException(status_code=404, detail="No image available for this post")
+    
+    try:
+        async with _httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
+            r = await client.get(source_url)
+        if r.status_code != 200:
+            raise HTTPException(status_code=502, detail="Could not fetch original image")
+        return Response(
+            content=r.content,
+            media_type="image/jpeg",
+            headers={
+                "Content-Disposition": f'attachment; filename="{post_id}.jpg"',
+                "Content-Length": str(len(r.content)),
+                "Cache-Control": "no-cache",
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Image fetch failed: {e}")
 
