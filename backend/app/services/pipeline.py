@@ -106,54 +106,57 @@ def select_relevant_fallback_image(title: str, content: str, recent_posts: list)
 
 def get_clean_fallback_caption(title: str, content: str, recent_posts: list) -> str:
     """
-    Generates a structured, professional tech caption of approximately 100 words.
-    Structure: Hook -> Insight -> CTA -> Emojis.
+    Generates a structured, professional, and informative tech caption of approximately 100 words dynamically.
+    Uses the article's own title and summary description to ensure relevance and uniqueness.
     """
-    topic = title.split(" - ")[0].split(" | ")[0].strip()
-    if topic.endswith(".") or topic.endswith("?"):
-        topic = topic[:-1]
-    
-    topic_words = topic.split()
-    if len(topic_words) > 6:
-        topic = " ".join(topic_words[:5])
+    title = title.strip()
+    if title.endswith(".") or title.endswith("?"):
+        title = title[:-1]
         
-    hooks = [
-        f"🚀 The tech landscape is shifting rapidly, and {topic} is leading the charge! This development marks a significant milestone, opening up new doors for developers and enterprises alike who want to leverage cutting-edge systems. As we dive deeper into this release, it becomes clear that modern engineering practices are evolving at a breakneck speed to keep up.",
-        f"💡 Innovation never stops in the digital era, and the announcement of {topic} is absolute proof of that! Software engineering teams and product managers are already analyzing how to integrate this breakthrough into their production stacks. This shift represents a major step forward in building highly scalable, resilient systems for the next decade.",
-        f"🌟 Big news in tech today as {topic} officially takes center stage! Industry experts are calling this a game-changing moment for digital transformation, paving the way for smarter workflows and more efficient system designs. It is fascinating to watch how rapidly theoretical concepts are being converted into highly practical, production-ready solutions."
+    description = ""
+    if content:
+        # Clean HTML tags and excessive spaces
+        description = re.sub(r'<[^>]*>', '', content)
+        description = re.sub(r'\s+', ' ', description).strip()
+        
+    # Construct the Hook introducing the topic
+    hook_templates = [
+        f"🚀 Major tech update: {title}! This significant announcement is drawing widespread interest across the industry as professionals analyze its potential impact.",
+        f"💡 {title} is officially taking center stage today! Here is a detailed look at what this latest development means for the industry.",
+        f"🌟 The tech ecosystem is evolving with the news that {title}! This move is expected to drive key changes in engineering and product strategies."
     ]
-    
-    insights = [
-        "🛠️ Adopting these advanced solutions early can provide a powerful competitive advantage in today's crowded market. By focusing heavily on developer experience, developer productivity, and overall systems efficiency, organizations can significantly reduce operational overhead and deploy updates much faster. Furthermore, the architecture emphasizes modularity, which simplifies long-term maintenance and makes future scalability adjustments a breeze.",
-        "📊 Standardizing development pipelines around these core updates ensures consistent, predictable results even under peak load. Teams that prioritize modular integrations report much faster iteration cycles and fewer deployment bottlenecks. In addition, mitigating technical debt early by adopting these robust standards helps secure system reliability for future enterprise expansion.",
-        "🧠 Designing modern systems with flexibility in mind is no longer optional—it is a critical requirement for long-term viability. Leveraging this framework allows engineering groups to optimize resource usage while maintaining top-tier security standards. Over time, these efficiency gains lead to massive cost savings and a much more responsive product ecosystem."
-    ]
-    
-    ctas = [
-        "📲 Make sure to explore how these updates fit into your standard deployment workflows. Evaluate the new architecture today to keep your product stack robust and future-proof. Let us know how your team is planning to adapt to these changes!",
-        "🔍 Carefully review this development to identify clean integrations for your existing software infrastructure. Standardizing on these patterns will help your team build faster and stay ahead of the curve. Check out the official documentation to get started!",
-        "⚡ Upgrade your deployment workflow by incorporating these design principles. Analyze the performance benchmarks and start building more efficient systems. Stay tuned for more deep dives into these engineering trends!"
-    ]
-    
-    # Extract first sentences (hooks) of recent posts to avoid duplication
-    recent_captions = [p.caption for p in recent_posts if p.caption]
-    recent_hooks = []
-    for cap in recent_captions:
-        parts = re.split(r'(?<=[.!?])\s+', cap)
-        if parts:
-            recent_hooks.append(parts[0])
-
-    available_hooks = [h for h in hooks if h not in recent_hooks]
-    if not available_hooks:
-        available_hooks = hooks
-
     import random
-    h = random.choice(available_hooks)
-    i = random.choice(insights)
-    c = random.choice(ctas)
+    hook = random.choice(hook_templates)
     
-    combined = f"{h}\n\n{i}\n\n{c}"
-    return combined
+    # Construct the Informative Body from description if available
+    if len(description) > 30:
+        sentences = re.split(r'(?<=[.!?])\s+', description)
+        body = " ".join(sentences[:3])
+        # Limit length to keep it concise
+        if len(body.split()) > 75:
+            body = " ".join(body.split()[:70]) + "..."
+    else:
+        # Fallback body summarizing generic impact of this specific title
+        body = "This update introduces key features and architecture revisions aimed at streamlining workflows. Industry leads are currently assessing the integration path to upgrade legacy frameworks and improve performance."
+
+    # Construct the CTA
+    ctas = [
+        "📲 Head over to the link in our bio to read the full comprehensive breakdown of this development and stay updated on the latest trends.",
+        "🔍 Stay ahead of industry shifts by reviewing the full details of this announcement. Make sure to check the official documentation for integration notes.",
+        "⚡ Explore the performance implications and architectural details of this release. Read the full coverage on our platform."
+    ]
+    cta = random.choice(ctas)
+    
+    # Combine Hook, Body, and CTA
+    full_text = f"{hook}\n\n📝 {body}\n\n{cta}"
+    
+    # Pad if it's too short to hit ~100 words
+    words = full_text.split()
+    if len(words) < 95:
+        padding = " Early adopters report that focusing on these design modifications yields major improvements in scaling speed and deployment safety."
+        full_text = f"{hook}\n\n📝 {body}{padding}\n\n{cta}"
+        
+    return full_text
 
 
 class AutomationPipeline:
@@ -194,43 +197,46 @@ class AutomationPipeline:
                 logger.warning("Pipeline run skipped: Cooldown active (last completed run was less than 5 minutes ago).")
                 return 0
 
-        # Check inventory threshold (DRAFT + QUEUED + PUBLISHING + FAILED)
-        available_posts = db.query(Post).filter(
-            Post.status.in_(["DRAFT", "QUEUED", "PUBLISHING", "FAILED"])
-        ).count()
-        
-        # Check today's auto-generated posts count to ensure we hit the 4 posts/day quota
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        today_auto_count = db.query(Post).filter(
-            Post.generation_source == "AUTO",
-            Post.created_at >= today_start
-        ).count()
+        if source == "MANUAL":
+            needed = limit
+        else:
+            # Check inventory threshold (DRAFT + QUEUED + PUBLISHING + FAILED)
+            available_posts = db.query(Post).filter(
+                Post.status.in_(["DRAFT", "QUEUED", "PUBLISHING", "FAILED"])
+            ).count()
+            
+            # Check today's auto-generated posts count to ensure we hit the 4 posts/day quota
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_auto_count = db.query(Post).filter(
+                Post.generation_source == "AUTO",
+                Post.created_at >= today_start
+            ).count()
 
-        needed_for_inventory = 12 - available_posts
-        needed_for_quota = 4 - today_auto_count
-        needed = max(needed_for_inventory, needed_for_quota)
+            needed_for_inventory = 12 - available_posts
+            needed_for_quota = 4 - today_auto_count
+            needed = max(needed_for_inventory, needed_for_quota)
 
-        if needed <= 0:
-            logger.info(f"Pipeline run skipped: Inventory threshold satisfied (have {available_posts} posts >= 12) and today's auto quota of 4 reached ({today_auto_count}).")
-            # Record skipped run
-            skipped_run = GenerationRun(
-                source=source,
-                started_at=datetime.utcnow(),
-                completed_at=datetime.utcnow(),
-                status="skipped",
-                generated_count=0
-            )
-            db.add(skipped_run)
-            db.add(ActivityLog(
-                action="skip_generation",
-                entity_type="system",
-                entity_id=None
-            ))
-            db.commit()
-            return 0
+            if needed <= 0:
+                logger.info(f"Pipeline run skipped: Inventory threshold satisfied (have {available_posts} posts >= 12) and today's auto quota of 4 reached ({today_auto_count}).")
+                # Record skipped run
+                skipped_run = GenerationRun(
+                    source=source,
+                    started_at=datetime.utcnow(),
+                    completed_at=datetime.utcnow(),
+                    status="skipped",
+                    generated_count=0
+                )
+                db.add(skipped_run)
+                db.add(ActivityLog(
+                    action="skip_generation",
+                    entity_type="system",
+                    entity_id=None
+                ))
+                db.commit()
+                return 0
             
         actual_limit = min(limit, needed)
-        logger.info(f"Inventory is {available_posts}/12 posts. Today's auto-generated: {today_auto_count}/4. Generating {actual_limit} posts (needed: {needed}).")
+        logger.info(f"Generating {actual_limit} posts (needed: {needed}) for source {source}.")
 
         # Log run start
         run_log = GenerationRun(
@@ -354,16 +360,24 @@ class AutomationPipeline:
                 if not content:
                     logger.info(f"Using fallback content for story {story.id}")
                     fallback_caption = get_clean_fallback_caption(story.title, story.content, recent_posts)
-                    topic_words = story.title.split()
-                    clean_tags = ["#Tech", "#Innovation", "#Software", "#Coding", "#TechNews", "#Future", "#Developer"]
-                    if len(topic_words) > 0:
-                        clean_word = re.sub(r'[^a-zA-Z0-9]', '', topic_words[0])
-                        if len(clean_word) > 2:
-                            clean_tags.insert(0, f"#{clean_word}")
+                    # Generate specific hashtags based on title keywords
+                    clean_tags = ["#TechNews", "#Tech", "#Innovation"]
+                    words = [re.sub(r'[^a-zA-Z0-9]', '', w) for w in story.title.split()]
+                    keywords = [w for w in words if len(w) > 3 and w.lower() not in ["with", "that", "this", "from", "your", "looks", "take", "more"]]
+                    for kw in keywords[:5]:
+                        tag = f"#{kw.capitalize()}"
+                        if tag not in clean_tags:
+                            clean_tags.append(tag)
+                    default_tags = ["#Developer", "#Software", "#Coding", "#FutureTech"]
+                    for dt in default_tags:
+                        if len(clean_tags) >= 8:
+                            break
+                        if dt not in clean_tags:
+                            clean_tags.append(dt)
                     content = {
                         "headline": story.title[:100],
                         "caption": fallback_caption,
-                        "hashtags": clean_tags[:7]
+                        "hashtags": clean_tags[:8]
                     }
                 
                 img_url = scraped_images.get(story.id)
