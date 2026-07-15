@@ -402,3 +402,29 @@ def update_settings(req: SettingsUpdateRequest, db: Session = Depends(get_db), c
     db.commit()
     return {"message": "Settings updated successfully"}
 
+from fastapi.responses import FileResponse
+from app.services.image_service import image_service
+
+@router.get("/posts/{post_id}/download")
+def download_post_image(post_id: str, clean: bool = False, db: Session = Depends(get_db)):
+    """
+    Download route that resolves the local post image and serves it as an attachment, preventing CORS fetch issues.
+    """
+    filename = f"{post_id}_clean.png" if clean else f"{post_id}.png"
+    filepath = os.path.join(image_service.output_dir, filename)
+    
+    if not os.path.exists(filepath):
+        # Fallback to standard card image if clean crop is missing
+        if clean:
+            filename = f"{post_id}.png"
+            filepath = os.path.join(image_service.output_dir, filename)
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=404, detail="Image not found")
+            
+    # Serve file with Content-Disposition attachment headers
+    return FileResponse(
+        path=filepath,
+        media_type="image/png",
+        filename=filename
+    )
+

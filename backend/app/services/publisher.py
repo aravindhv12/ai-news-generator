@@ -100,7 +100,7 @@ class PublisherService:
             item.attempt_count += 1
             db.commit()
 
-            image_url = f"{public_host}/output/{post.id}_clean.png" if public_host else post.image_url
+            image_url = f"{public_host}/output/{post.id}.png" if public_host else post.image_url
             
             logger.info(f"Publishing post {post.id} (Attempt {item.attempt_count})...")
             

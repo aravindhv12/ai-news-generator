@@ -67,6 +67,9 @@ function App() {
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Lightbox preview modal state
+  const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null);
+
   const showToast = (message: string) => {
     setToastMessage(message);
     setTimeout(() => {
@@ -94,41 +97,16 @@ function App() {
     }
   };
 
-  const handleDownloadImage = async (post: any) => {
-    try {
-      const imageUrl = `${apiBaseURL}/output/${post.id}_clean.png`;
-      const response = await fetch(imageUrl);
-      if (!response.ok) {
-        throw new Error("Clean image not found");
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${post.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-clean.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      showToast("Downloaded clean image! 📥");
-    } catch (err) {
-      try {
-        const imageUrl = `${apiBaseURL}/output/${post.id}.png`;
-        const response = await fetch(imageUrl);
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${post.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-card.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        showToast("Downloaded card image! 📥");
-      } catch (e) {
-        alert("Failed to download image.");
-      }
-    }
+  const handleDownloadImage = (post: any) => {
+    // Open the backend download endpoint to serve the image directly as a PNG attachment
+    const downloadUrl = `${apiBaseURL}/api/posts/${post.id}/download?clean=false`;
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `${post.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast("Downloading high-quality image... 📥");
   };
 
   // Redesigned dashboard state variables
@@ -647,14 +625,14 @@ function App() {
                       <article key={post.id} className="post-card slide-up">
                         <div className="post-image-container">
                           <img 
-                            src={`${apiBaseURL}/output/${post.id}_clean.png`} 
+                            src={`${apiBaseURL}/output/${post.id}.png`} 
                             alt="Post Preview" 
                             className="preview-img" 
+                            style={{ cursor: 'zoom-in' }}
+                            onClick={() => setActiveLightboxImage(`${apiBaseURL}/output/${post.id}.png`)}
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
-                              if (target.src.includes('_clean.png')) {
-                                target.src = `${apiBaseURL}/output/${post.id}.png`;
-                              } else if (target.src.includes('.png')) {
+                              if (target.src.includes('.png') && !target.src.includes(post.image_url)) {
                                 target.src = post.image_url;
                               }
                             }} 
@@ -1100,6 +1078,14 @@ function App() {
       {toastMessage && (
         <div className="toast-notification">
           <span>{toastMessage}</span>
+        </div>
+      )}
+      {activeLightboxImage && (
+        <div className="lightbox-overlay" onClick={() => setActiveLightboxImage(null)}>
+          <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+            <button className="lightbox-close" onClick={() => setActiveLightboxImage(null)}>×</button>
+            <img src={activeLightboxImage} alt="Fullscreen Preview" className="lightbox-img" />
+          </div>
         </div>
       )}
     </div>
