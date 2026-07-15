@@ -374,8 +374,18 @@ class AutomationPipeline:
                             break
                         if dt not in clean_tags:
                             clean_tags.append(dt)
+                    # Ensure fallback headline is between 10 and 15 words
+                    headline_words = story.title.split()
+                    if len(headline_words) < 10:
+                        padding_words = ["latest", "development", "brings", "significant", "industry", "advancement", "today"]
+                        while len(headline_words) < 11 and padding_words:
+                            headline_words.append(padding_words.pop(0))
+                    elif len(headline_words) > 15:
+                        headline_words = headline_words[:14]
+                    fallback_headline = " ".join(headline_words)
+                    
                     content = {
-                        "headline": story.title[:100],
+                        "headline": fallback_headline,
                         "caption": fallback_caption,
                         "hashtags": clean_tags[:8]
                     }

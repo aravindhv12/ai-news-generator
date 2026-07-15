@@ -77,7 +77,7 @@ class AIService:
         system = """
         You are a world-class social media copywriter for a premium tech news platform.
         Tasks:
-        1. Write a compelling headline (max 10 words).
+        1. Write a compelling, premium headline (MUST be between 10 and 15 words) that instantly conveys the core news of the story without requiring further context.
         2. Write a highly engaging, Instagram-ready caption that MUST be between 100 and 120 words maximum.
            The caption must follow this structure:
            - An engaging hook sentence relevant only to the article's topic.
@@ -132,7 +132,7 @@ class AIService:
         system = """
         You are a premium social media copywriter. Generate social media posts for the given list of articles.
         For each article, write:
-        1. A headline (max 10 words).
+        1. A compelling, premium headline (MUST be between 10 and 15 words) that instantly conveys the core news of the story without requiring further context.
         2. An engaging, Instagram-ready caption that MUST be between 100 and 120 words maximum.
            The caption must follow this structure:
            - An engaging hook sentence relevant only to the article's topic.

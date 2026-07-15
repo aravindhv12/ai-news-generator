@@ -30,21 +30,29 @@ class SocialCardGenerator:
         # Download fonts if they do not exist
         async with httpx.AsyncClient() as client:
             font_sources = [
-                ("Lato-Bold.ttf", self.font_bold_path),
-                ("Lato-Regular.ttf", self.font_regular_path)
+                ("Inter-Bold.ttf", [
+                    "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-Bold.ttf",
+                    "https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bslnt%2Cwght%5D.ttf"
+                ]),
+                ("Inter-Regular.ttf", [
+                    "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-Regular.ttf",
+                    "https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bslnt%2Cwght%5D.ttf"
+                ])
             ]
-            for source_name, path in font_sources:
+            for source_name, urls in font_sources:
+                path = os.path.join(self.font_dir, source_name)
                 if not os.path.exists(path):
-                    try:
-                        logger.info(f"Downloading {source_name} from Google Fonts...")
-                        url = f"https://raw.githubusercontent.com/google/fonts/main/ofl/lato/{source_name}"
-                        resp = await client.get(url, follow_redirects=True, timeout=15.0)
-                        if resp.status_code == 200:
-                            with open(path, "wb") as f:
-                                f.write(resp.content)
-                            logger.info(f"Successfully downloaded {source_name} as {os.path.basename(path)}")
-                    except Exception as e:
-                        logger.error(f"Failed to download font {source_name}: {e}")
+                    for url in urls:
+                        try:
+                            logger.info(f"Downloading {source_name} from {url}...")
+                            resp = await client.get(url, follow_redirects=True, timeout=15.0)
+                            if resp.status_code == 200:
+                                with open(path, "wb") as f:
+                                    f.write(resp.content)
+                                logger.info(f"Successfully downloaded {source_name}")
+                                break
+                        except Exception as e:
+                            logger.error(f"Failed to download from {url}: {e}")
 
     async def download_image(self, url: str) -> Optional[Image.Image]:
 
@@ -60,17 +68,17 @@ class SocialCardGenerator:
     def generate_card(self, article_image: Image.Image, headline: str, summary: str, post_id: str) -> str:
         # Standardized design tokens
         width, height = 1080, 1080
-        padding = 80
-        background_color = (15, 15, 17) # Premium near-black
-        accent_color = (0, 255, 127)    # Neon green accent
-        text_primary = (255, 255, 255)  # Clean white
-        text_secondary = (160, 160, 170) # Muted grey
+        padding = 90
+        background_color = (10, 10, 12)   # Premium deep slate-black
+        accent_color = (0, 255, 127)      # Neon green accent
+        text_primary = (255, 255, 255)    # Clean white
+        text_secondary = (160, 160, 170)  # Muted grey
         
         # Initialize card image
         card = Image.new('RGB', (width, height), color=background_color)
         
-        # Standardized Top Image Area: Exactly 55% height
-        img_h = int(height * 0.55)
+        # Top Image Area: 54% height
+        img_h = int(height * 0.54)
         article_image = article_image.convert("RGB")
         article_image = self._resize_and_crop(article_image, (width, img_h))
         card.paste(article_image, (0, 0))
@@ -82,33 +90,46 @@ class SocialCardGenerator:
         # Draw text area background
         draw.rectangle([0, text_area_y, width, height], fill=background_color)
         
-        # Load fonts using standard fallback checks
-        try:
-            font_h = ImageFont.truetype(self.font_bold, 44)
-        except:
+        # Load fonts with robust fallbacks
+        font_bold_size = 48
+        font_regular_size = 24
+        
+        font_h = None
+        for p in [self.font_bold, "/System/Library/Fonts/HelveticaNeue.ttc", "/Library/Fonts/Arial.ttf"]:
+            try:
+                font_h = ImageFont.truetype(p, font_bold_size)
+                break
+            except:
+                continue
+        if not font_h:
             font_h = ImageFont.load_default()
             
-        try:
-            font_s = ImageFont.truetype(self.font_regular, 28)
-        except:
-            font_s = ImageFont.load_default()
+        font_r = None
+        for p in [self.font_regular, "/System/Library/Fonts/HelveticaNeue.ttc", "/Library/Fonts/Arial.ttf"]:
+            try:
+                font_r = ImageFont.truetype(p, font_regular_size)
+                break
+            except:
+                continue
+        if not font_r:
+            font_r = ImageFont.load_default()
             
-        # Draw Headline
-        headline_y = text_area_y + 50
+        # Draw Category Tag above headline
+        tag_y = text_area_y + 45
+        draw.text((padding, tag_y), "⚡ TECH DIRECT", font=font_r, fill=accent_color)
+        
+        # Draw Premium Headline (No summary/caption text for visual elegance and whitespace)
+        headline_y = tag_y + 45
         wrapped_headline = self._wrap_text(headline, font_h, width - (padding * 2))
-        draw.text((padding, headline_y), wrapped_headline, font=font_h, fill=text_primary)
+        draw.text((padding, headline_y), wrapped_headline, font=font_h, fill=text_primary, spacing=8)
         
-        # Draw Caption/Summary
-        # Calculate headline height to position summary dynamically
-        h_lines = wrapped_headline.count('\n') + 1
-        summary_y = headline_y + (h_lines * 55) + 30
-        wrapped_summary = self._wrap_text(summary, font_s, width - (padding * 2))
-        draw.text((padding, summary_y), wrapped_summary, font=font_s, fill=text_secondary)
-        
-        # Draw Brand Accent Label (aligned to bottom)
+        # Draw Minimalist Brand Accent Label at the bottom
         brand_y = height - 90
         brand_name = settings.PROJECT_NAME.upper()
-        draw.text((padding, brand_y), brand_name, font=font_h, fill=accent_color)
+        # Draw tiny accent green square
+        draw.rectangle([padding, brand_y + 8, padding + 8, brand_y + 16], fill=accent_color)
+        # Draw text next to the square
+        draw.text((padding + 20, brand_y), brand_name, font=font_r, fill=text_secondary)
         
         output_path = os.path.join(self.output_dir, f"{post_id}.png")
         card.save(output_path)

@@ -19,7 +19,9 @@ import {
   ThumbsUp,
   ThumbsDown,
   ArrowRight,
-  Plus
+  Plus,
+  Copy,
+  Download
 } from 'lucide-react';
 import './App.css';
 
@@ -61,6 +63,73 @@ function App() {
 
   // Processing state for post actions to prevent double click
   const [processingPostIds, setProcessingPostIds] = useState<string[]>([]);
+
+  // Toast notification state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 2500);
+  };
+
+  const handleCopyCaption = async (post: any) => {
+    const fullText = `${post.title}\n\n${post.caption}\n\n${post.hashtags || ''}`;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(fullText);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = fullText;
+        textarea.style.position = "fixed";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      showToast("Caption copied to clipboard! 📋");
+    } catch (err) {
+      alert("Failed to copy caption.");
+    }
+  };
+
+  const handleDownloadImage = async (post: any) => {
+    try {
+      const imageUrl = `${apiBaseURL}/output/${post.id}_clean.png`;
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error("Clean image not found");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${post.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-clean.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      showToast("Downloaded clean image! 📥");
+    } catch (err) {
+      try {
+        const imageUrl = `${apiBaseURL}/output/${post.id}.png`;
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${post.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-card.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        showToast("Downloaded card image! 📥");
+      } catch (e) {
+        alert("Failed to download image.");
+      }
+    }
+  };
 
   // Redesigned dashboard state variables
   const [stats, setStats] = useState({
@@ -626,6 +695,21 @@ function App() {
                               )}
                             </button>
                           </div>
+                          
+                          <div className="card-secondary-actions">
+                            <button 
+                              className="btn-secondary" 
+                              onClick={() => handleCopyCaption(post)}
+                            >
+                              <Copy size={14} /> Copy Caption
+                            </button>
+                            <button 
+                              className="btn-secondary" 
+                              onClick={() => handleDownloadImage(post)}
+                            >
+                              <Download size={14} /> Download Image
+                            </button>
+                          </div>
 
                         </div>
                       </article>
@@ -1011,6 +1095,11 @@ function App() {
               Keep Me Logged In
             </button>
           </div>
+        </div>
+      )}
+      {toastMessage && (
+        <div className="toast-notification">
+          <span>{toastMessage}</span>
         </div>
       )}
     </div>
