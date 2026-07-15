@@ -69,29 +69,37 @@ class SocialCardGenerator:
         # Standardized design tokens
         width, height = 1080, 1080
         padding = 90
-        background_color = (10, 10, 12)   # Premium deep slate-black
         accent_color = (0, 255, 127)      # Neon green accent
         text_primary = (255, 255, 255)    # Clean white
         text_secondary = (160, 160, 170)  # Muted grey
         
-        # Initialize card image
-        card = Image.new('RGB', (width, height), color=background_color)
-        
-        # Top Image Area: 54% height
-        img_h = int(height * 0.54)
+        # 1. Resize and crop original article image to full square
         article_image = article_image.convert("RGB")
-        article_image = self._resize_and_crop(article_image, (width, img_h))
-        card.paste(article_image, (0, 0))
+        card = self._resize_and_crop(article_image, (width, height))
         
-        # Bottom Text Area Drawing
+        # Convert to RGBA for alpha composite gradient overlay
+        card = card.convert("RGBA")
+        
+        # 2. Draw a smooth vertical dark shadow gradient at the bottom of the card
+        # This keeps the top/middle subject visible while ensuring absolute text readability.
+        gradient_layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        grad_draw = ImageDraw.Draw(gradient_layer)
+        
+        start_y = 500
+        end_y = 1080
+        for y in range(start_y, end_y):
+            # Alpha scales from 0 to 240 smoothly
+            alpha = int((y - start_y) / (end_y - start_y) * 240)
+            grad_draw.line([(0, y), (width, y)], fill=(10, 10, 12, alpha))
+            
+        # Paste the gradient overlay onto the card image
+        card = Image.alpha_composite(card, gradient_layer)
+        
+        # 3. Draw text elements on the composited canvas
         draw = ImageDraw.Draw(card)
-        text_area_y = img_h
         
-        # Draw text area background
-        draw.rectangle([0, text_area_y, width, height], fill=background_color)
-        
-        # Load fonts with robust fallbacks
-        font_bold_size = 48
+        # Load fonts with robust system fallbacks
+        font_bold_size = 52
         font_regular_size = 24
         
         font_h = None
@@ -115,13 +123,13 @@ class SocialCardGenerator:
             font_r = ImageFont.load_default()
             
         # Draw Category Tag above headline
-        tag_y = text_area_y + 45
+        tag_y = 710
         draw.text((padding, tag_y), "⚡ TECH DIRECT", font=font_r, fill=accent_color)
         
-        # Draw Premium Headline (No summary/caption text for visual elegance and whitespace)
+        # Draw Bold, Premium Headline (10-15 words) directly on the image
         headline_y = tag_y + 45
         wrapped_headline = self._wrap_text(headline, font_h, width - (padding * 2))
-        draw.text((padding, headline_y), wrapped_headline, font=font_h, fill=text_primary, spacing=8)
+        draw.text((padding, headline_y), wrapped_headline, font=font_h, fill=text_primary, spacing=10)
         
         # Draw Minimalist Brand Accent Label at the bottom
         brand_y = height - 90
@@ -131,6 +139,8 @@ class SocialCardGenerator:
         # Draw text next to the square
         draw.text((padding + 20, brand_y), brand_name, font=font_r, fill=text_secondary)
         
+        # Save output in high-quality PNG format (RGB)
+        card = card.convert("RGB")
         output_path = os.path.join(self.output_dir, f"{post_id}.png")
         card.save(output_path)
         return output_path
