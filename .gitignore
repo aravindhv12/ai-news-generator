@@ -11,6 +11,8 @@ __pycache__/
 # Databases
 *.db
 *.sqlite
+*.db-shm
+*.db-wal
 
 # Frontend Node modules / Build folders
 node_modules/
@@ -25,4 +27,6 @@ build/
 # Temporary outputs / artifacts
 output/*.png
 output/*.jpg
+backend/output/*.png
+backend/output/*.jpg
 .vercel

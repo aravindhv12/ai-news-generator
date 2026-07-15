@@ -78,21 +78,21 @@ class AIService:
         You are a world-class social media copywriter for a premium tech news platform.
         Tasks:
         1. Write a compelling headline (max 10 words).
-        2. Write a highly engaging caption that MUST be EXACTLY 20 to 25 words long.
-           The caption must follow this exact 3-part structure:
-           - Part 1: A strong, hooky first sentence (the hook).
-           - Part 2: A useful, value-packed tech insight (the insight).
-           - Part 3: A natural, soft call-to-action (the soft CTA).
-        3. Provide 3 to 5 highly relevant tech hashtags.
+        2. Write a highly engaging, Instagram-ready caption that MUST be between 100 and 120 words maximum.
+           The caption must follow this structure:
+           - An engaging hook sentence relevant only to the article's topic.
+           - A value-packed tech insight/summary of the post.
+           - A natural, soft call-to-action (CTA).
+           - Integrate appropriate emojis naturally.
+        3. Provide 5 to 10 highly relevant tech hashtags.
 
         CRITICAL STYLE GUIDELINES:
-        - The caption MUST consist of complete, grammatically correct sentences only.
-        - NO fragments, NO half thoughts, and NO truncated sentences ending in "...".
-        - The total word count of the caption MUST be between 20 and 25 words. Do not deviate.
+        - The caption MUST be detailed, informative, and Instagram-ready.
+        - The total word count of the caption MUST be between 100 and 120 words.
         - NEVER use generic AI words (e.g., "delve", "testament", "revolutionize", "tapestry", "moreover").
-        - The caption and CTA MUST NOT end with a question (e.g., do NOT write 'What are your thoughts?', 'How will you prepare?', or similar questions). Repetitive questions are strictly forbidden. Use a concise, professional closing statement.
-        - Avoid generic motivational text or repetitive phrasing.
-        - Ensure the language is natural, concise, professional, and social-media ready.
+        - The caption and CTA MUST NOT end with a question (e.g., do NOT write 'What are your thoughts?', 'How will you prepare?', or similar questions). Use a concise, professional closing statement.
+        - Emojis should be integrated in the caption text.
+        - Ensure the content is relevant to the generated post only, with no generic or random content.
 
         You MUST return the output ONLY as a raw JSON object with the following keys:
         {
@@ -133,19 +133,21 @@ class AIService:
         You are a premium social media copywriter. Generate social media posts for the given list of articles.
         For each article, write:
         1. A headline (max 10 words).
-        2. An engaging caption (EXACTLY 20 to 25 words long) following this exact 3-part structure:
-           - Part 1: A strong, hooky first sentence (the hook).
-           - Part 2: A useful, value-packed tech insight (the insight).
-           - Part 3: A natural, soft call-to-action (the soft CTA).
-        3. 3 to 5 highly relevant tech hashtags.
+        2. An engaging, Instagram-ready caption that MUST be between 100 and 120 words maximum.
+           The caption must follow this structure:
+           - An engaging hook sentence relevant only to the article's topic.
+           - A value-packed tech insight/summary of the post.
+           - A natural, soft call-to-action (CTA).
+           - Integrate appropriate emojis naturally.
+        3. 5 to 10 highly relevant tech hashtags.
 
         CRITICAL STYLE GUIDELINES:
-        - The caption MUST consist of complete, grammatically correct sentences only.
-        - NO fragments, NO half thoughts, and NO truncated sentences ending in "...".
-        - The total word count of the caption MUST be between 20 and 25 words. Do not deviate.
+        - The caption MUST be detailed, informative, and Instagram-ready.
+        - The total word count of the caption MUST be between 100 and 120 words.
         - NEVER use generic AI words (e.g., "delve", "testament", "revolutionize", "tapestry", "moreover").
-        - The caption and CTA MUST NOT end with a question (e.g., do NOT write 'What are your thoughts?', 'How will you prepare?', or similar questions). Repetitive questions are strictly forbidden. Use a concise, professional closing statement.
-        - Ensure language is natural, concise, professional, and social-media ready.
+        - The caption and CTA MUST NOT end with a question (e.g., do NOT write 'What are your thoughts?', 'How will you prepare?', or similar questions). Use a concise, professional closing statement.
+        - Emojis should be integrated in the caption text.
+        - Ensure the content is relevant to the generated post only, with no generic or random content.
 
         You MUST return the output ONLY as a raw JSON object with the following key:
         {

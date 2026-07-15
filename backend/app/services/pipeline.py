@@ -106,9 +106,8 @@ def select_relevant_fallback_image(title: str, content: str, recent_posts: list)
 
 def get_clean_fallback_caption(title: str, content: str, recent_posts: list) -> str:
     """
-    Generates a structured, professional tech caption of exactly 20-25 words.
-    Structure: Hook -> Insight -> CTA.
-    Guarantees no duplicate captions or hooks against recent posts.
+    Generates a structured, professional tech caption of approximately 100 words.
+    Structure: Hook -> Insight -> CTA -> Emojis.
     """
     topic = title.split(" - ")[0].split(" | ")[0].strip()
     if topic.endswith(".") or topic.endswith("?"):
@@ -119,45 +118,24 @@ def get_clean_fallback_caption(title: str, content: str, recent_posts: list) -> 
         topic = " ".join(topic_words[:5])
         
     hooks = [
-        f"{topic} is redefining how teams build software.",
-        f"The rapid evolution of {topic} is accelerating industry trends.",
-        f"A new milestone for {topic} has officially been reached.",
-        f"Recent developments in {topic} are turning heads across tech.",
-        f"Significant updates to {topic} promise to streamline engineering workflows.",
-        f"Understanding {topic} is now essential for modern product teams.",
-        f"New reports on {topic} indicate major industry restructuring ahead.",
-        f"Key shifts in {topic} are creating fresh opportunities globally.",
-        f"Deploying {topic} allows organizations to optimize resource usage.",
-        f"The architecture behind {topic} offers major scalability improvements."
+        f"🚀 The tech landscape is shifting rapidly, and {topic} is leading the charge! This development marks a significant milestone, opening up new doors for developers and enterprises alike who want to leverage cutting-edge systems. As we dive deeper into this release, it becomes clear that modern engineering practices are evolving at a breakneck speed to keep up.",
+        f"💡 Innovation never stops in the digital era, and the announcement of {topic} is absolute proof of that! Software engineering teams and product managers are already analyzing how to integrate this breakthrough into their production stacks. This shift represents a major step forward in building highly scalable, resilient systems for the next decade.",
+        f"🌟 Big news in tech today as {topic} officially takes center stage! Industry experts are calling this a game-changing moment for digital transformation, paving the way for smarter workflows and more efficient system designs. It is fascinating to watch how rapidly theoretical concepts are being converted into highly practical, production-ready solutions."
     ]
     
     insights = [
-        "Adopting these tools early provides a strong competitive edge.",
-        "Automating key processes helps teams minimize overhead and deploy faster.",
-        "Focusing on developer efficiency is critical for modern software groups.",
-        "Integrating this technology helps systems scale with minimal maintenance.",
-        "This shift forces engineering leads to rethink existing system design.",
-        "Teams prioritizing this integration report much higher delivery speeds.",
-        "Mitigating these technical risks secures better long-term system stability.",
-        "Leveraging structured frameworks makes scaling operations simpler and cleaner.",
-        "Standardizing these pipelines ensures consistent results under peak load.",
-        "Improving codebase flexibility allows for rapid adaptation to future changes."
+        "🛠️ Adopting these advanced solutions early can provide a powerful competitive advantage in today's crowded market. By focusing heavily on developer experience, developer productivity, and overall systems efficiency, organizations can significantly reduce operational overhead and deploy updates much faster. Furthermore, the architecture emphasizes modularity, which simplifies long-term maintenance and makes future scalability adjustments a breeze.",
+        "📊 Standardizing development pipelines around these core updates ensures consistent, predictable results even under peak load. Teams that prioritize modular integrations report much faster iteration cycles and fewer deployment bottlenecks. In addition, mitigating technical debt early by adopting these robust standards helps secure system reliability for future enterprise expansion.",
+        "🧠 Designing modern systems with flexibility in mind is no longer optional—it is a critical requirement for long-term viability. Leveraging this framework allows engineering groups to optimize resource usage while maintaining top-tier security standards. Over time, these efficiency gains lead to massive cost savings and a much more responsive product ecosystem."
     ]
     
     ctas = [
-        "Explore how this updates standard deployment workflows.",
-        "Integrate these modern tools to optimize developer experience.",
-        "Ensure your team remains aligned with current technology trends.",
-        "Evaluate this architectural change for your production stack.",
-        "Consider this framework for your upcoming software systems.",
-        "Standardize on these updates to enhance long-term scalability.",
-        "Review this development to secure cleaner system integrations.",
-        "Leverage these design principles to reduce system overhead.",
-        "Analyze these results to boost overall system efficiency.",
-        "Incorporate this update to keep your software stack robust."
+        "📲 Make sure to explore how these updates fit into your standard deployment workflows. Evaluate the new architecture today to keep your product stack robust and future-proof. Let us know how your team is planning to adapt to these changes!",
+        "🔍 Carefully review this development to identify clean integrations for your existing software infrastructure. Standardizing on these patterns will help your team build faster and stay ahead of the curve. Check out the official documentation to get started!",
+        "⚡ Upgrade your deployment workflow by incorporating these design principles. Analyze the performance benchmarks and start building more efficient systems. Stay tuned for more deep dives into these engineering trends!"
     ]
     
-    # Extract first sentences (hooks) and full captions of recent posts to avoid duplication
+    # Extract first sentences (hooks) of recent posts to avoid duplication
     recent_captions = [p.caption for p in recent_posts if p.caption]
     recent_hooks = []
     for cap in recent_captions:
@@ -165,40 +143,17 @@ def get_clean_fallback_caption(title: str, content: str, recent_posts: list) -> 
         if parts:
             recent_hooks.append(parts[0])
 
-    # Filter candidate hooks and insights to ensure diversity
     available_hooks = [h for h in hooks if h not in recent_hooks]
     if not available_hooks:
         available_hooks = hooks
-        
-    available_insights = insights
+
+    import random
+    h = random.choice(available_hooks)
+    i = random.choice(insights)
+    c = random.choice(ctas)
     
-    # Try combinations
-    for _ in range(300):
-        h = random.choice(available_hooks)
-        i = random.choice(available_insights)
-        c = random.choice(ctas)
-        combined = f"{h} {i} {c}"
-        if combined in recent_captions:
-            continue
-        word_count = len(combined.split())
-        if 20 <= word_count <= 25:
-            return combined
-            
-    # Default fallback construct if search fails
-    h = available_hooks[0]
-    i = available_insights[0]
-    c = ctas[0]
-    combined = f"{h} {i} {c}"
-    words = combined.split()
-    
-    if len(words) < 20:
-        padding = ["now", "today", "efficiently", "seamlessly", "securely", "at scale"]
-        while len(words) < 22:
-            words.insert(-2, random.choice(padding))
-    elif len(words) > 25:
-        words = words[:23] + [words[-1]]
-        
-    return " ".join(words)
+    combined = f"{h}\n\n{i}\n\n{c}"
+    return combined
 
 
 class AutomationPipeline:
@@ -376,6 +331,22 @@ class AutomationPipeline:
             recent_posts = db.query(Post).order_by(Post.created_at.desc()).limit(20).all()
             recent_urls = [p.image_url for p in recent_posts if p.image_url]
 
+            async def process_story_image(story):
+                try:
+                    img_url = await asyncio.wait_for(
+                        scraper_service.extract_og_image(story.url),
+                        timeout=5.0
+                    )
+                except:
+                    img_url = None
+                return story.id, img_url
+
+            # 5. Run image scraping concurrently
+            scraping_tasks = [process_story_image(story) for story in top_stories]
+            scraped_results = await asyncio.gather(*scraping_tasks)
+            scraped_images = dict(scraped_results)
+
+            posts_to_create = []
             for story in top_stories:
                 content = ai_posts_by_id.get(story.id)
                 
@@ -383,20 +354,19 @@ class AutomationPipeline:
                 if not content:
                     logger.info(f"Using fallback content for story {story.id}")
                     fallback_caption = get_clean_fallback_caption(story.title, story.content, recent_posts)
+                    topic_words = story.title.split()
+                    clean_tags = ["#Tech", "#Innovation", "#Software", "#Coding", "#TechNews", "#Future", "#Developer"]
+                    if len(topic_words) > 0:
+                        clean_word = re.sub(r'[^a-zA-Z0-9]', '', topic_words[0])
+                        if len(clean_word) > 2:
+                            clean_tags.insert(0, f"#{clean_word}")
                     content = {
                         "headline": story.title[:100],
                         "caption": fallback_caption,
-                        "hashtags": ["#Tech", "#News", f"#{story.source.replace(' ', '')}"]
+                        "hashtags": clean_tags[:7]
                     }
                 
-                # 5. Extract Image
-                try:
-                    img_url = await asyncio.wait_for(
-                        scraper_service.extract_og_image(story.url),
-                        timeout=10.0
-                    )
-                except:
-                    img_url = None
+                img_url = scraped_images.get(story.id)
                 
                 # Check if scraped image is generic or duplicate
                 is_scraped_invalid = False
@@ -408,33 +378,51 @@ class AutomationPipeline:
                         
                 final_image_url = img_url if (img_url and not is_scraped_invalid) else select_relevant_fallback_image(story.title, story.content, recent_posts)
 
+                hashtag_str = " ".join(content.get("hashtags", [])) if content.get("hashtags") else None
+
                 # Create Post record
                 post = Post(
                     news_id=story.id,
                     title=content.get("headline", story.title[:100]),
                     caption=content.get("caption"),
+                    hashtags=hashtag_str,
                     template="default",
                     generation_source=source,
                     image_url=final_image_url,
                     status="DRAFT"
                 )
                 db.add(post)
-                db.commit()
+                # Flush to assign post ID
+                db.flush()
                 generated_count += 1
                 
                 # Update recent_posts list in-memory so subsequent iterations in this run
                 # avoid selecting the same image.
                 recent_posts.insert(0, post)
                 recent_urls.insert(0, final_image_url)
-                
-                # 6. Generate Social Card
+                posts_to_create.append(post)
+            
+            # Commit metadata to database
+            db.commit()
+
+            # 6. Concurrently download images, crop/save clean images, and generate social cards
+            async def process_card_and_clean_image(post_obj):
                 try:
-                    if post.image_url:
-                        img = await image_service.download_image(post.image_url)
+                    if post_obj.image_url:
+                        img = await image_service.download_image(post_obj.image_url)
                         if img:
-                            image_service.generate_card(img, post.title, post.caption, str(post.id))
+                            # Save clean cropped 1080x1080 square image for Instagram
+                            clean_img = image_service._resize_and_crop(img, (1080, 1080))
+                            clean_path = os.path.join(image_service.output_dir, f"{post_obj.id}_clean.png")
+                            clean_img.save(clean_path)
+
+                            # Generate card image for local preview
+                            image_service.generate_card(img, post_obj.title, post_obj.caption, str(post_obj.id))
                 except Exception as e:
-                    logger.error(f"Card generation failed: {e}")
+                    logger.error(f"Card or clean image generation failed for post {post_obj.id}: {e}")
+
+            card_generation_tasks = [process_card_and_clean_image(p) for p in posts_to_create]
+            await asyncio.gather(*card_generation_tasks)
             
             # Log successful completion
             run_log.completed_at = datetime.utcnow()
@@ -481,14 +469,16 @@ class AutomationPipeline:
         deleted_assets_count = 0
         
         for post in rejected_posts:
-            # Delete corresponding generated card image
+            # Delete corresponding generated card and clean images
             card_path = os.path.join(image_service.output_dir, f"{post.id}.png")
-            if os.path.exists(card_path):
-                try:
-                    os.remove(card_path)
-                    deleted_assets_count += 1
-                except Exception as e:
-                    logger.error(f"Failed to delete asset {card_path}: {e}")
+            clean_path = os.path.join(image_service.output_dir, f"{post.id}_clean.png")
+            for path in [card_path, clean_path]:
+                if os.path.exists(path):
+                    try:
+                        os.remove(path)
+                        deleted_assets_count += 1
+                    except Exception as e:
+                        logger.error(f"Failed to delete asset {path}: {e}")
             
             db.delete(post)
             deleted_posts_count += 1

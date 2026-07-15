@@ -83,7 +83,7 @@ def get_post(post_id: str, db: Session = Depends(get_db), current_user: Any = De
     return post
 
 @router.post("/generate")
-async def generate_posts(req: GenerateRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):
+async def generate_posts(req: GenerateRequest, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):
     """
     Manually generate a custom amount of posts immediately.
     """
@@ -94,8 +94,14 @@ async def generate_posts(req: GenerateRequest, background_tasks: BackgroundTasks
         raise HTTPException(status_code=429, detail="Too many generation requests. Please wait 30 seconds.")
 
     pipeline.status = "running"
-    background_tasks.add_task(bg_run_generation, req.count, "MANUAL")
-    return {"message": "Manual generation started in background"}
+    try:
+        count = await pipeline.run_generation(db, limit=req.count, source="MANUAL", bypass_cooldown=True)
+        return {"message": "Manual generation completed", "generated_count": count}
+    except Exception as e:
+        logger.error(f"Manual generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        pipeline.status = "idle"
 
 @router.post("/posts/approve")
 def approve_post(req: ActionRequest, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):

@@ -298,13 +298,11 @@ function App() {
     setLocalGenerating(true);
     try {
       await api.post('/api/generate', { count });
-      // Wait 3 seconds to let the background task start and register in the DB
-      setTimeout(() => {
-        setLocalGenerating(false);
-      }, 3000);
+      await fetchData();
     } catch (err) {
-      setLocalGenerating(false);
       alert("Failed to trigger generation. Please check if you are within the 30 seconds rate limit.");
+    } finally {
+      setLocalGenerating(false);
     }
   };
 
@@ -579,8 +577,19 @@ function App() {
                     posts.filter(p => p.status === 'DRAFT').map(post => (
                       <article key={post.id} className="post-card slide-up">
                         <div className="post-image-container">
-                          <img src={`${apiBaseURL}/output/${post.id}.png`} alt="Card" className="preview-img" 
-                            onError={(e) => {(e.target as HTMLImageElement).src = post.image_url}} />
+                          <img 
+                            src={`${apiBaseURL}/output/${post.id}_clean.png`} 
+                            alt="Post Preview" 
+                            className="preview-img" 
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              if (target.src.includes('_clean.png')) {
+                                target.src = `${apiBaseURL}/output/${post.id}.png`;
+                              } else if (target.src.includes('.png')) {
+                                target.src = post.image_url;
+                              }
+                            }} 
+                          />
                         </div>
                         <div className="post-info">
                           <div className="post-meta-header">
